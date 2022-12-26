@@ -1,0 +1,23 @@
+[package]
+name = "snaptik-bot"
+description = "This bot can reply to a message with link to tiktok video with video file"
+repository = "https://github.com/Ty3uK/snaptik-bot"
+license = "MIT"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+worker = "0.0.11"
+serde = "1.0.151"
+serde_json = "1.0.91"
+reqwest = { version = "0.11.13", features = ["json"] }
+url = "2.3.1"
+regex = "1.7.0"
+lazy_static = "1.4.0"
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
