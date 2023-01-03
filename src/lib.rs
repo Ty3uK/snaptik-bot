@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 mod telegram;
 mod snaptik;
+mod panic_hook;
 
 use telegram::Telegram;
 use snaptik::Snaptik;
@@ -15,6 +16,8 @@ struct RouterData {
 
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
+    panic_hook::set_panic_hook();
+
     let api_path = match env.secret("BOT_TOKEN") {
         Ok(token) => format!("https://api.telegram.org/bot{}", token.to_string()),
         Err(err) => panic!("{}", err),
@@ -52,15 +55,46 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             let tg_client = Telegram::new(&client, &ctx.data.api_path);
             let mut snaptik_client = Snaptik::new(&client);
 
-            let update = match req.json::<telegram::Update>().await {
-                Ok(data) => data.message,
+            let mut update = match req.json::<telegram::Update>().await {
+                Ok(data) =>
+                    match data.message {
+                        Some(data) => data,
+                        None => return Response::ok(""),
+                    }
                 Err(err) => {
                     console_error!("{}", err);
                     return Response::ok("");
                 },
             };
-            let chat_id = update.chat.unwrap().id;
-            let message_text = &update.text.unwrap();
+
+            let chat = match &update.chat {
+                Some(chat) => chat,
+                None => return Response::ok(""),
+            };
+
+            let chat_id = chat.id;
+            let mut message_text = match &update.text {
+                Some(text) => text.to_owned(),
+                None => return Response::ok(""),
+            };
+
+            if message_text.is_empty() {
+                return Response::ok("");
+            }
+
+
+            if chat.chat_type != telegram::ChatType::Private {
+                if message_text != "@SnapTikRsBot" {
+                    return Response::ok("");
+                }
+
+                if update.reply_to_message.is_none() {
+                    return Response::ok("");
+                }
+
+                update = *update.reply_to_message.unwrap();
+                message_text = update.text.unwrap();
+            }
 
             if message_text == "/start" {
                 let message = telegram::SendMessage {
@@ -90,7 +124,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 };
             };
 
-            let url = match Url::parse(message_text) {
+            let url = match Url::parse(&message_text) {
                 Ok(url) => url,
                 Err(_) => {
                     send_bad_url_message().await;

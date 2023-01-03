@@ -1,6 +1,18 @@
 use reqwest::{Client, Error};
 use serde::{Deserialize, Serialize};
 
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
+pub enum ChatType {
+    #[serde(rename(deserialize = "private"))]
+    Private,
+    #[serde(rename(deserialize = "group"))]
+    Group,
+    #[serde(rename(deserialize = "supergroup"))]
+    Supergroup,
+    #[serde(rename(deserialize = "channel"))]
+    Channel,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SetWebhook {
     pub url: String,
@@ -8,7 +20,9 @@ pub struct SetWebhook {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Chat {
-    pub id: isize,
+    pub id: i64,
+    #[serde(rename(deserialize = "type", serialize = "type"))]
+    pub chat_type: ChatType,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -16,24 +30,25 @@ pub struct Message {
     pub message_id: Option<isize>,
     pub chat: Option<Chat>,
     pub text: Option<String>,
+    pub reply_to_message: Option<Box<Message>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Update {
     pub update_id: isize,
-    pub message: Message,
+    pub message: Option<Message>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SendMessage {
-    pub chat_id: isize,
+    pub chat_id: i64,
     pub text: String,
     pub reply_to_message_id: Option<isize>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SendVideo {
-    pub chat_id: isize,
+    pub chat_id: i64,
     pub video: String,
     pub reply_to_message_id: Option<isize>,
 }
