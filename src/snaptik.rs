@@ -1,6 +1,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{Client, Error};
+use worker::console_warn;
 
 pub struct Snaptik<'a> {
     boundary: String,
@@ -68,12 +69,15 @@ impl<'a> Snaptik<'a> {
         );
 
         lazy_static! {
-            static ref TIKTOK_URL_REGEX: Regex = Regex::new(r#""(https://cdn.snaptik.app/.+?)""#).unwrap();
+            static ref TIKTOK_URL_REGEX: Regex = Regex::new(r#""((https://cdn.snaptik.app/|https://d.rapidcdn.app/).+?)""#).unwrap();
         }
 
-        let capts = TIKTOK_URL_REGEX.captures(&decoded_str).unwrap();
-        if capts.len() > 0 {
-            return Ok(capts[1].to_string());
+        if let Some(capts) = TIKTOK_URL_REGEX.captures(&decoded_str) {
+            if capts.len() > 0 {
+                return Ok(capts[1].to_string());
+            }
+        } else {
+            console_warn!("{decoded_str}");
         }
 
         Ok(String::from(""))
