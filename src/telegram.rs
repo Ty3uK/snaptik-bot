@@ -1,4 +1,5 @@
-use reqwest::{Client, Error};
+use anyhow::{Result, anyhow};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -31,6 +32,12 @@ pub struct Message {
     pub chat: Option<Chat>,
     pub text: Option<String>,
     pub reply_to_message: Option<Box<Message>>,
+    pub video: Option<Video>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Video {
+    pub file_id: String,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -53,6 +60,18 @@ pub struct SendVideo {
     pub reply_to_message_id: Option<isize>,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(untagged)]
+pub enum Response<T> {
+    Ok {
+        result: T,
+    },
+    Err {
+        error_code: i64,
+        description: String,
+    },
+}
+
 pub struct Telegram<'a> {
     client: &'a Client,
     api_path: &'a str,
@@ -66,30 +85,39 @@ impl<'a> Telegram<'a> {
         }
     }
 
-    pub async fn set_webhook(&self, webhook: &SetWebhook<'_>) -> Result<String, Error> {
+    pub async fn set_webhook(&self, webhook: &SetWebhook<'_>) -> Result<String> {
         self.client.post(self.api_path.to_owned() + "/setWebhook")
             .json(&webhook)
             .send()
             .await?
             .text()
             .await
+            .map_err(|err| anyhow!(err))
     }
 
-    pub async fn send_message(&self, message: &SendMessage) -> Result<Message, Error> {
+    pub async fn send_message(&self, message: &SendMessage) -> Result<Message> {
         self.client.post(self.api_path.to_owned() + "/sendMessage")
             .json(&message)
             .send()
             .await?
-            .json::<Message>()
+            .json::<Response<Message>>()
             .await
+            .map(|resp| match resp {
+                Response::Ok { result } => Ok(result),
+                Response::Err { description, .. } => Err(anyhow!(description)),
+            })?
     }
 
-    pub async fn send_video(&self, video: &SendVideo) -> Result<(), Error> {
+    pub async fn send_video(&self, video: &SendVideo) -> Result<Message> {
         self.client.post(self.api_path.to_owned() + "/sendVideo")
             .json(&video)
             .send()
-            .await?;
-
-        Ok(())
+            .await?
+            .json::<Response<Message>>()
+            .await
+            .map(|resp| match resp {
+                Response::Ok { result } => Ok(result),
+                Response::Err { description, .. } => Err(anyhow!(description)),
+            })?
     }
 }

@@ -1,8 +1,9 @@
-use reqwest::Client;
+use db::Db;
 use serde::{Deserialize, Serialize};
-use url_resolver::{snap::SnapUrlResolver, ResolveUrl, Platform, UrlResolver};
+use url_resolver::{snap::SnapUrlResolver, Platform, ResolveUrl, UrlResolver};
 use worker::*;
 
+mod db;
 mod telegram;
 mod url_resolver;
 
@@ -30,8 +31,8 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
 }
 
 async fn setup_webhook(_req: Request, ctx: RouteContext<RouterData>) -> Result<Response> {
-    let client = Client::new();
-    let tg_client = Telegram::new(&client, &ctx.data.api_path);
+    let http_client = reqwest::Client::new();
+    let tg_client = Telegram::new(&http_client, &ctx.data.api_path);
     let webhook = telegram::SetWebhook {
         url: "https://snaptik-bot.ty3uk.workers.dev/api/update",
     };
@@ -45,8 +46,9 @@ async fn setup_webhook(_req: Request, ctx: RouteContext<RouterData>) -> Result<R
 }
 
 async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Result<Response> {
-    let client = Client::new();
-    let tg_client = Telegram::new(&client, &ctx.data.api_path);
+    let db = Db::new(&ctx.env);
+    let http_client = reqwest::Client::new();
+    let tg_client = Telegram::new(&http_client, &ctx.data.api_path);
 
     let update = match req.json::<telegram::Update>().await {
         Ok(data) => match data.message {
@@ -86,6 +88,10 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         message_text = update.text.unwrap();
     }
 
+    if !message_text.ends_with('/') {
+        message_text.push('/');
+    }
+
     if message_text == "/start" {
         let message = telegram::SendMessage {
             chat_id: chat.id,
@@ -120,6 +126,26 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
+    if let Some(db) = &db {
+        match db.get_video_file_id(&message_text).await {
+            Ok(Some(file_id)) => {
+                let video = telegram::SendVideo {
+                    chat_id: chat.id,
+                    video: file_id,
+                    reply_to_message_id: update.message_id,
+                };
+
+                if let Err(err) = tg_client.send_video(&video).await {
+                    console_error!("{}", err);
+                }
+
+                return Response::ok("");
+            }
+            Err(err) => console_error!("`db.get_video_file_id` error: {err}"),
+            _ => (),
+        }
+    }
+
     let platform = match Platform::new(url.host_str()) {
         Ok(url) => url,
         Err(err) => {
@@ -130,8 +156,10 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     };
 
     let resolver: UrlResolver = match platform {
-        Platform::TikTok => UrlResolver::TikTok(SnapUrlResolver::new(&client, &platform)),
-        Platform::Instagram => UrlResolver::Instagram(SnapUrlResolver::new(&client, &platform)),
+        Platform::TikTok => UrlResolver::TikTok(SnapUrlResolver::new(&http_client, &platform)),
+        Platform::Instagram => {
+            UrlResolver::Instagram(SnapUrlResolver::new(&http_client, &platform))
+        }
     };
 
     let send_service_error_message = |text: String| async {
@@ -169,9 +197,19 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         reply_to_message_id: update.message_id,
     };
 
-    if let Err(err) = tg_client.send_video(&video).await {
-        console_error!("{}", err);
-    }
+    let video = match tg_client.send_video(&video).await {
+        Ok(message) => message.video,
+        Err(err) => {
+            console_error!("`telegram.send_video` error: {err}");
+            None
+        }
+    };
+
+    if let (Some(db), Some(video)) = (&db, &video) {
+        if let Err(err) = db.insert_video_file_id(&message_text, &video.file_id).await {
+            console_error!("`db.insert_video_file_id` error: {err}")
+        }
+    };
 
     Response::ok("")
 }
