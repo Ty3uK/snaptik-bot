@@ -1,9 +1,6 @@
 name = "snaptik-bot"
 main = "build/worker/shim.mjs"
-compatibility_date = "2022-01-20"
-
-[vars]
-WORKERS_RS_VERSION = "1.1.0"
+compatibility_date = "2023-06-28"
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"

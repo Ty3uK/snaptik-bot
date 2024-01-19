@@ -10,5 +10,9 @@ en
 Content-Disposition: form-data; name="token"
 
 {token}
+--{boundary}
+Content-Disposition: form-data; name="action"
+
+post
 --{boundary}--
 

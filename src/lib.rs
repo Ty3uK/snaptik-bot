@@ -1,13 +1,12 @@
 use reqwest::Client;
-use worker::*;
 use serde::{Deserialize, Serialize};
+use url_resolver::{snap::SnapUrlResolver, ResolveUrl, Platform, UrlResolver};
+use worker::*;
 
 mod telegram;
-mod snaptik;
-mod panic_hook;
+mod url_resolver;
 
 use telegram::Telegram;
-use snaptik::Snaptik;
 
 #[derive(Deserialize, Serialize)]
 struct RouterData {
@@ -16,187 +15,163 @@ struct RouterData {
 
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
-    panic_hook::set_panic_hook();
+    console_error_panic_hook::set_once();
 
-    let api_path = match env.secret("BOT_TOKEN") {
-        Ok(token) => format!("https://api.telegram.org/bot{}", token.to_string()),
-        Err(err) => panic!("{}", err),
-    };
+    let api_path = env
+        .secret("BOT_TOKEN")
+        .map(|token| format!("https://api.telegram.org/bot{}", token.to_string()))
+        .unwrap();
 
-    let router_data = RouterData {
-        api_path,
-    };
-
-    // Optionally, use the Router to handle matching endpoints, use ":name" placeholders, or "*name"
-    // catch-alls to match on specific patterns. Alternatively, use `Router::with_data(D)` to
-    // provide arbitrary data that will be accessible in each route via the `ctx.data()` method.
-    let router = Router::with_data(router_data);
-
-    // Add as many routes as your Worker needs! Each route will get a `Request` for handling HTTP
-    // functionality and a `RouteContext` which you can use to  and get route parameters and
-    // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
-    router
-        .get_async("/api/webhook", |_, ctx| async move {
-            let client = Client::new();
-            let tg_client = Telegram::new(&client, &ctx.data.api_path);
-            let webhook = telegram::SetWebhook {
-                url: String::from("https://snaptik-bot.ty3uk.workers.dev/api/update"),
-            };
-
-            match tg_client.set_webhook(&webhook).await {
-                Ok(_) => (),
-                Err(err) => console_error!("{}", err),
-            }
-
-            Response::ok("Success")
-        })
-        .post_async("/api/update", |mut req, ctx| async move {
-            let client = Client::new();
-            let tg_client = Telegram::new(&client, &ctx.data.api_path);
-            let mut snaptik_client = Snaptik::new(&client);
-
-            let mut update = match req.json::<telegram::Update>().await {
-                Ok(data) =>
-                    match data.message {
-                        Some(data) => data,
-                        None => return Response::ok(""),
-                    }
-                Err(err) => {
-                    console_error!("{}", err);
-                    return Response::ok("");
-                },
-            };
-
-            let chat = match &update.chat {
-                Some(chat) => chat,
-                None => return Response::ok(""),
-            };
-
-            let chat_id = chat.id;
-            let mut message_text = match &update.text {
-                Some(text) => text.to_owned(),
-                None => return Response::ok(""),
-            };
-
-            if message_text.is_empty() {
-                return Response::ok("");
-            }
-
-
-            if chat.chat_type != telegram::ChatType::Private {
-                if message_text != "@SnapTikRsBot" {
-                    return Response::ok("");
-                }
-
-                if update.reply_to_message.is_none() {
-                    return Response::ok("");
-                }
-
-                update = *update.reply_to_message.unwrap();
-                message_text = update.text.unwrap();
-            }
-
-            if message_text == "/start" {
-                let message = telegram::SendMessage {
-                    chat_id,
-                    text: String::from("Привет! Я бот, который позволяет скачивать видео из TikTok.\n\nПришли мне ссылку, а в ответ я пришлю видео."),
-                    reply_to_message_id: None,
-                };
-
-                match tg_client.send_message(&message).await {
-                    Ok(_) => (),
-                    Err(err) => console_error!("{}", err),
-                }
-
-                return Response::ok("");
-            }
-
-            let send_bad_url_message = || async {
-                let message = telegram::SendMessage {
-                    chat_id,
-                    text: String::from("Необходимо прислать ссылку на видео из TikTok"),
-                    reply_to_message_id: update.message_id,
-                };
-
-                match tg_client.send_message(&message).await {
-                    Ok(_) => (),
-                    Err(err) => console_error!("{}", err),
-                };
-            };
-
-            let url = match Url::parse(&message_text) {
-                Ok(url) => url,
-                Err(_) => {
-                    send_bad_url_message().await;
-                    return Response::ok("");
-                },
-            };
-
-            let is_correct_host = match url.host_str() {
-                Some(host) => host.ends_with(".tiktok.com"),
-                None => false,
-            };
-
-            if !is_correct_host {
-                send_bad_url_message().await;
-                return Response::ok("");
-            }
-
-            let url_str = url.to_string();
-
-            let send_service_error_message = || async {
-                let message = telegram::SendMessage {
-                    chat_id,
-                    text: String::from("Сервис временно недоступен"),
-                    reply_to_message_id: update.message_id,
-                };
-
-                match tg_client.send_message(&message).await {
-                    Ok(_) => (),
-                    Err(err) => console_error!("{}", err),
-                }
-            };
-
-            let has_token = match snaptik_client.get_token().await {
-                Ok(has_token) => has_token,
-                Err(err) => {
-                    console_error!("{}", err);
-                    send_service_error_message().await;
-                    return Response::ok("");
-                },
-            };
-
-            if !has_token {
-                send_service_error_message().await;
-                return Response::ok("");
-            }
-
-            let tiktok_url = match snaptik_client.get_tiktok_url(&url_str).await {
-                Ok(url) => url,
-                Err(err) => {
-                    console_error!("{}", err);
-                    send_service_error_message().await;
-                    return Response::ok("");
-                },
-            };
-
-            if tiktok_url.is_empty() {
-                send_service_error_message().await;
-                return Response::ok("");
-            }
-
-            let video = telegram::SendVideo {
-                chat_id,
-                video: tiktok_url,
-                reply_to_message_id: update.message_id,
-            };
-
-            if let Some(err) = tg_client.send_video(&video).await.err() {
-                console_error!("{}", err);
-            }
-
-            Response::ok("")
-        })
+    Router::with_data(RouterData { api_path })
+        .get_async("/api/webhook", setup_webhook)
+        .post_async("/api/update", process_update)
         .run(req, env)
-    .await
+        .await
+}
+
+async fn setup_webhook(_req: Request, ctx: RouteContext<RouterData>) -> Result<Response> {
+    let client = Client::new();
+    let tg_client = Telegram::new(&client, &ctx.data.api_path);
+    let webhook = telegram::SetWebhook {
+        url: "https://snaptik-bot.ty3uk.workers.dev/api/update",
+    };
+
+    match tg_client.set_webhook(&webhook).await {
+        Ok(_) => (),
+        Err(err) => console_error!("{}", err),
+    }
+
+    Response::ok("Success")
+}
+
+async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Result<Response> {
+    let client = Client::new();
+    let tg_client = Telegram::new(&client, &ctx.data.api_path);
+
+    let update = match req.json::<telegram::Update>().await {
+        Ok(data) => match data.message {
+            Some(data) => data,
+            None => return Response::ok(""),
+        },
+        Err(err) => {
+            console_error!("{}", err);
+            return Response::ok("");
+        }
+    };
+
+    let chat = match &update.chat {
+        Some(chat) => chat,
+        None => return Response::ok(""),
+    };
+
+    let mut message_text = match update.text {
+        Some(text) => text,
+        None => return Response::ok(""),
+    };
+
+    if message_text.is_empty() {
+        return Response::ok("");
+    }
+
+    if chat.chat_type != telegram::ChatType::Private {
+        if message_text != "@SnapTikRsBot" {
+            return Response::ok("");
+        }
+
+        if update.reply_to_message.is_none() {
+            return Response::ok("");
+        }
+
+        let update = *update.reply_to_message.unwrap();
+        message_text = update.text.unwrap();
+    }
+
+    if message_text == "/start" {
+        let message = telegram::SendMessage {
+            chat_id: chat.id,
+            text: String::from("Привет! Я бот, который позволяет скачивать видео из TikTok.\n\nПришли мне ссылку, а в ответ я пришлю видео."),
+            reply_to_message_id: None,
+        };
+
+        if let Err(err) = tg_client.send_message(&message).await {
+            console_error!("{}", err);
+        }
+
+        return Response::ok("");
+    }
+
+    let send_bad_url_message = || async {
+        let message = telegram::SendMessage {
+            chat_id: chat.id,
+            text: String::from("Only TikTok or Instagram links are accepted."),
+            reply_to_message_id: update.message_id,
+        };
+
+        if let Err(err) = tg_client.send_message(&message).await {
+            console_error!("{}", err);
+        }
+    };
+
+    let url = match Url::parse(&message_text) {
+        Ok(url) => url,
+        Err(_) => {
+            send_bad_url_message().await;
+            return Response::ok("");
+        }
+    };
+
+    let platform = match Platform::new(url.host_str()) {
+        Ok(url) => url,
+        Err(err) => {
+            console_error!("{err}; {url}");
+            send_bad_url_message().await;
+            return Response::ok("");
+        }
+    };
+
+    let resolver: UrlResolver = match platform {
+        Platform::TikTok => UrlResolver::TikTok(SnapUrlResolver::new(&client, &platform)),
+        Platform::Instagram => UrlResolver::Instagram(SnapUrlResolver::new(&client, &platform)),
+    };
+
+    let send_service_error_message = |text: String| async {
+        let message = telegram::SendMessage {
+            chat_id: chat.id,
+            text,
+            reply_to_message_id: update.message_id,
+        };
+
+        if let Err(err) = tg_client.send_message(&message).await {
+            console_error!("{}", err);
+        }
+    };
+
+    let url = match resolver.resolve_url(url.as_str()).await {
+        Ok(mut url) => {
+            let query_pairs: Vec<_> = url
+                .query_pairs()
+                .filter(|(key, _)| key != "dl")
+                .map(|(key, value)| (key.into_owned(), value.into_owned()))
+                .collect();
+            url.query_pairs_mut().clear().extend_pairs(query_pairs);
+            url
+        }
+        Err(err) => {
+            console_error!("{err}");
+            send_service_error_message("Cannot process video.".to_string()).await;
+            return Response::ok("");
+        }
+    };
+
+    let video = telegram::SendVideo {
+        chat_id: chat.id,
+        video: url.to_string(),
+        reply_to_message_id: update.message_id,
+    };
+
+    if let Err(err) = tg_client.send_video(&video).await {
+        console_error!("{}", err);
+    }
+
+    Response::ok("")
 }

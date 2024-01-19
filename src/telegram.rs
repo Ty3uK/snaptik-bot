@@ -14,8 +14,8 @@ pub enum ChatType {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct SetWebhook {
-    pub url: String,
+pub struct SetWebhook<'a> {
+    pub url: &'a str,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -55,18 +55,18 @@ pub struct SendVideo {
 
 pub struct Telegram<'a> {
     client: &'a Client,
-    api_path: &'a String,
+    api_path: &'a str,
 }
 
 impl<'a> Telegram<'a> {
-    pub fn new(client: &'a Client, api_path: &'a String) -> Self {
+    pub fn new(client: &'a Client, api_path: &'a str) -> Self {
         Self {
             client,
             api_path,
         }
     }
 
-    pub async fn set_webhook(&self, webhook: &SetWebhook) -> Result<String, Error> {
+    pub async fn set_webhook(&self, webhook: &SetWebhook<'_>) -> Result<String, Error> {
         self.client.post(self.api_path.to_owned() + "/setWebhook")
             .json(&webhook)
             .send()
