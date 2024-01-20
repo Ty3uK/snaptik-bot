@@ -58,6 +58,7 @@ pub struct SendVideo {
     pub chat_id: i64,
     pub video: String,
     pub reply_to_message_id: Option<isize>,
+    pub caption: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

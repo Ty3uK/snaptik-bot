@@ -1,6 +1,8 @@
 use db::Db;
 use serde::{Deserialize, Serialize};
-use url_resolver::{snap::SnapUrlResolver, Platform, ResolveUrl, UrlResolver};
+use url_resolver::{
+    shorts::ShortsUrlResolver, snap::SnapUrlResolver, Platform, ResolveUrl, UrlResolver,
+};
 use worker::*;
 
 mod db;
@@ -133,6 +135,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
                     chat_id: chat.id,
                     video: file_id,
                     reply_to_message_id: update.message_id,
+                    caption: Some(message_text.clone()),
                 };
 
                 if let Err(err) = tg_client.send_video(&video).await {
@@ -160,6 +163,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         Platform::Instagram => {
             UrlResolver::Instagram(SnapUrlResolver::new(&http_client, &platform))
         }
+        Platform::Shorts => UrlResolver::Shorts(ShortsUrlResolver::new(&http_client)),
     };
 
     let send_service_error_message = |text: String| async {
@@ -195,6 +199,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         chat_id: chat.id,
         video: url.to_string(),
         reply_to_message_id: update.message_id,
+        caption: Some(message_text.clone()),
     };
 
     let video = match tg_client.send_video(&video).await {

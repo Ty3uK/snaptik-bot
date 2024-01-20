@@ -54,6 +54,7 @@ impl<'a> SnapUrlResolver<'a> {
         match self.platform {
             Platform::TikTok => Ok("https://snaptik.app/abc2.php"),
             Platform::Instagram => Ok("https://snapinsta.app/action2.php"),
+            _ => bail!("Unsupported platform: {:?}", self.platform),
         }
     }
 
@@ -61,6 +62,7 @@ impl<'a> SnapUrlResolver<'a> {
         match self.platform {
             Platform::TikTok => Ok("https://snaptik.app/"),
             Platform::Instagram => Ok("https://snapinsta.app/"),
+            _ => bail!("Unsupported platform: {:?}", self.platform),
         }
     }
 }
