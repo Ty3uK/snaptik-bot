@@ -10,7 +10,7 @@ A bot that can download videos from:
 
 You need to set several secrets in Cloudflare Worker settings:
 
-- `BOT_TOKEN` - token from (@BotFather)[https://t.me/BotFather]
+- `BOT_TOKEN` - token from [@BotFather](https://t.me/BotFather)
 - `LIBSQL_CLIENT_TOKEN` - token from any libSQL provider
 - `LIBSQL_CLIENT_URL` - connection URL from any libSQL provider (HTTP-operated)
 
