@@ -9,7 +9,7 @@ mod db;
 mod telegram;
 mod url_resolver;
 
-use telegram::{DeleteMessage, EditMessageText, Telegram};
+use telegram::{DeleteMessage, EditMessageText, LinkPreviewOptions, Telegram};
 
 #[derive(Deserialize, Serialize)]
 struct RouterData {
@@ -90,15 +90,12 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         message_text = update.text.unwrap();
     }
 
-    if !message_text.ends_with('/') {
-        message_text.push('/');
-    }
-
     if message_text == "/start" {
         let message = telegram::SendMessage {
             chat_id: chat.id,
-            text: String::from("Привет! Я бот, который позволяет скачивать видео из TikTok.\n\nПришли мне ссылку, а в ответ я пришлю видео."),
+            text: include_str!("../assets/start_message.txt").to_string(),
             reply_to_message_id: None,
+            link_preview_options: Some(LinkPreviewOptions { is_disabled: Some(true) }),
         };
 
         if let Err(err) = tg_client.send_message(&message).await {
@@ -113,6 +110,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
             chat_id: chat.id,
             text: "⏱️  Processing...".to_string(),
             reply_to_message_id: update.message_id,
+            link_preview_options: None,
         })
         .await
     {
@@ -136,13 +134,19 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
-    let url = match Url::parse(&message_text) {
+    let mut url = match Url::parse(&message_text) {
         Ok(url) => url,
         Err(_) => {
             send_bad_url_message().await;
             return Response::ok("");
         }
     };
+
+    let mut url_path = url.path().to_owned();
+    if !url_path.ends_with('/') {
+        url_path.push('/');
+        url.set_path(&url_path);
+    }
 
     if let Some(db) = &db {
         match db.get_video_file_id(&message_text).await {

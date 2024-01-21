@@ -41,6 +41,11 @@ pub struct Video {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct LinkPreviewOptions {
+    pub is_disabled: Option<bool>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Update {
     pub update_id: isize,
     pub message: Option<Message>,
@@ -51,6 +56,7 @@ pub struct SendMessage {
     pub chat_id: i64,
     pub text: String,
     pub reply_to_message_id: Option<isize>,
+    pub link_preview_options: Option<LinkPreviewOptions>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
