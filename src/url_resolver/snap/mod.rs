@@ -5,7 +5,7 @@ use url::Url;
 mod util;
 use util::{decode, DECODER_ARGS_REGEX, RESULT_VIDEO_URL_REGEX, TOKEN_REGEX};
 
-use super::{ResolveUrl, Platform};
+use super::{Platform, ResolveUrl};
 
 static BOUNDARY: &str = "----WebKitFormBoundary214sQgEtL6ZBo4uE";
 

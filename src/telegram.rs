@@ -56,6 +56,7 @@ pub struct SendMessage {
     pub chat_id: i64,
     pub text: String,
     pub reply_to_message_id: Option<isize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub link_preview_options: Option<LinkPreviewOptions>,
 }
 

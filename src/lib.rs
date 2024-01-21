@@ -91,14 +91,17 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     }
 
     if message_text == "/start" {
-        let message = telegram::SendMessage {
-            chat_id: chat.id,
-            text: include_str!("../assets/start_message.txt").to_string(),
-            reply_to_message_id: None,
-            link_preview_options: Some(LinkPreviewOptions { is_disabled: Some(true) }),
-        };
-
-        if let Err(err) = tg_client.send_message(&message).await {
+        if let Err(err) = tg_client
+            .send_message(&telegram::SendMessage {
+                chat_id: chat.id,
+                text: include_str!("../assets/start_message.txt").to_string(),
+                reply_to_message_id: None,
+                link_preview_options: Some(LinkPreviewOptions {
+                    is_disabled: Some(true),
+                }),
+            })
+            .await
+        {
             console_error!("{err}");
         }
 
