@@ -9,7 +9,7 @@ mod db;
 mod telegram;
 mod url_resolver;
 
-use telegram::Telegram;
+use telegram::{DeleteMessage, EditMessageText, Telegram};
 
 #[derive(Deserialize, Serialize)]
 struct RouterData {
@@ -102,21 +102,37 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         };
 
         if let Err(err) = tg_client.send_message(&message).await {
-            console_error!("{}", err);
+            console_error!("{err}");
         }
 
         return Response::ok("");
     }
 
-    let send_bad_url_message = || async {
-        let message = telegram::SendMessage {
+    let message_to_edit = match tg_client
+        .send_message(&telegram::SendMessage {
             chat_id: chat.id,
-            text: String::from("Only TikTok or Instagram links are accepted."),
+            text: "⏱️  Processing...".to_string(),
             reply_to_message_id: update.message_id,
-        };
+        })
+        .await
+    {
+        Ok(message) => message,
+        Err(err) => {
+            console_error!("{err}");
+            return Response::ok("");
+        }
+    };
 
-        if let Err(err) = tg_client.send_message(&message).await {
-            console_error!("{}", err);
+    let send_bad_url_message = || async {
+        if let Err(err) = tg_client
+            .edit_message_text(&EditMessageText {
+                chat_id: chat.id,
+                message_id: message_to_edit.message_id,
+                text: "❌ Only TikTok, Instagram or Shorts links are accepted.".to_string(),
+            })
+            .await
+        {
+            console_error!("{err}");
         }
     };
 
@@ -131,15 +147,26 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     if let Some(db) = &db {
         match db.get_video_file_id(&message_text).await {
             Ok(Some(file_id)) => {
-                let video = telegram::SendVideo {
-                    chat_id: chat.id,
-                    video: file_id,
-                    reply_to_message_id: update.message_id,
-                    caption: Some(message_text.clone()),
-                };
+                if let Err(err) = tg_client
+                    .send_video(&telegram::SendVideo {
+                        chat_id: chat.id,
+                        video: file_id,
+                        reply_to_message_id: update.message_id,
+                        caption: Some(message_text.clone()),
+                    })
+                    .await
+                {
+                    console_error!("{err}");
+                }
 
-                if let Err(err) = tg_client.send_video(&video).await {
-                    console_error!("{}", err);
+                if let Err(err) = tg_client
+                    .delete_message(&DeleteMessage {
+                        chat_id: chat.id,
+                        message_id: message_to_edit.message_id.unwrap(),
+                    })
+                    .await
+                {
+                    console_error!("{err}");
                 }
 
                 return Response::ok("");
@@ -152,7 +179,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     let platform = match Platform::new(url.host_str()) {
         Ok(url) => url,
         Err(err) => {
-            console_error!("{err}; {url}");
+            console_error!("{err}: {url}");
             send_bad_url_message().await;
             return Response::ok("");
         }
@@ -164,18 +191,6 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
             UrlResolver::Instagram(SnapUrlResolver::new(&http_client, &platform))
         }
         Platform::Shorts => UrlResolver::Shorts(ShortsUrlResolver::new(&http_client)),
-    };
-
-    let send_service_error_message = |text: String| async {
-        let message = telegram::SendMessage {
-            chat_id: chat.id,
-            text,
-            reply_to_message_id: update.message_id,
-        };
-
-        if let Err(err) = tg_client.send_message(&message).await {
-            console_error!("{}", err);
-        }
     };
 
     let url = match resolver.resolve_url(url.as_str()).await {
@@ -190,25 +205,47 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
         Err(err) => {
             console_error!("{err}");
-            send_service_error_message("Cannot process video.".to_string()).await;
+
+            if let Err(err) = tg_client
+                .edit_message_text(&EditMessageText {
+                    chat_id: chat.id,
+                    message_id: message_to_edit.message_id,
+                    text: "❌ Cannot process video.".to_string(),
+                })
+                .await
+            {
+                console_error!("{err}");
+            }
+
             return Response::ok("");
         }
     };
 
-    let video = telegram::SendVideo {
-        chat_id: chat.id,
-        video: url.to_string(),
-        reply_to_message_id: update.message_id,
-        caption: Some(message_text.clone()),
-    };
+    if let Err(err) = tg_client
+        .delete_message(&DeleteMessage {
+            chat_id: chat.id,
+            message_id: message_to_edit.message_id.unwrap(),
+        })
+        .await
+    {
+        console_error!("{err}");
+    }
 
-    let video = match tg_client.send_video(&video).await {
-        Ok(message) => message.video,
-        Err(err) => {
-            console_error!("`telegram.send_video` error: {err}");
-            None
-        }
-    };
+    let video = tg_client
+        .send_video(&telegram::SendVideo {
+            chat_id: chat.id,
+            video: url.to_string(),
+            reply_to_message_id: update.message_id,
+            caption: Some(message_text.clone()),
+        })
+        .await
+        .map_or_else(
+            |err| {
+                console_error!("{err}");
+                None
+            },
+            |it| it.video,
+        );
 
     if let (Some(db), Some(video)) = (&db, &video) {
         if let Err(err) = db.insert_video_file_id(&message_text, &video.file_id).await {

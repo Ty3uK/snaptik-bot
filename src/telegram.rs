@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +62,19 @@ pub struct SendVideo {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct EditMessageText {
+    pub chat_id: i64,
+    pub message_id: Option<isize>,
+    pub text: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DeleteMessage {
+    pub chat_id: i64,
+    pub message_id: isize,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
 pub enum Response<T> {
     Ok {
@@ -80,14 +93,12 @@ pub struct Telegram<'a> {
 
 impl<'a> Telegram<'a> {
     pub fn new(client: &'a Client, api_path: &'a str) -> Self {
-        Self {
-            client,
-            api_path,
-        }
+        Self { client, api_path }
     }
 
     pub async fn set_webhook(&self, webhook: &SetWebhook<'_>) -> Result<String> {
-        self.client.post(self.api_path.to_owned() + "/setWebhook")
+        self.client
+            .post(self.api_path.to_owned() + "/setWebhook")
             .json(&webhook)
             .send()
             .await?
@@ -97,7 +108,8 @@ impl<'a> Telegram<'a> {
     }
 
     pub async fn send_message(&self, message: &SendMessage) -> Result<Message> {
-        self.client.post(self.api_path.to_owned() + "/sendMessage")
+        self.client
+            .post(self.api_path.to_owned() + "/sendMessage")
             .json(&message)
             .send()
             .await?
@@ -110,7 +122,8 @@ impl<'a> Telegram<'a> {
     }
 
     pub async fn send_video(&self, video: &SendVideo) -> Result<Message> {
-        self.client.post(self.api_path.to_owned() + "/sendVideo")
+        self.client
+            .post(self.api_path.to_owned() + "/sendVideo")
             .json(&video)
             .send()
             .await?
@@ -120,5 +133,29 @@ impl<'a> Telegram<'a> {
                 Response::Ok { result } => Ok(result),
                 Response::Err { description, .. } => Err(anyhow!(description)),
             })?
+    }
+
+    pub async fn edit_message_text(&self, edit_message_text: &EditMessageText) -> Result<Message> {
+        self.client
+            .post(self.api_path.to_owned() + "/editMessageText")
+            .json(&edit_message_text)
+            .send()
+            .await?
+            .json::<Response<Message>>()
+            .await
+            .map(|resp| match resp {
+                Response::Ok { result } => Ok(result),
+                Response::Err { description, .. } => Err(anyhow!(description)),
+            })?
+    }
+
+    pub async fn delete_message(&self, delete_message: &DeleteMessage) -> Result<()> {
+        self.client
+            .post(self.api_path.to_owned() + "/deleteMessage")
+            .json(&delete_message)
+            .send()
+            .await
+            .map(|_| ())
+            .map_err(|err| anyhow!(err))
     }
 }
