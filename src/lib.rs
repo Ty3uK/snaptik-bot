@@ -1,7 +1,8 @@
 use db::Db;
 use serde::{Deserialize, Serialize};
 use url_resolver::{
-    shorts::ShortsUrlResolver, snap::SnapUrlResolver, Platform, ResolveUrl, UrlResolver,
+    shorts::ShortsUrlResolver, snap::SnapUrlResolver, twitter::TwitterUrlResolver, Platform,
+    ResolveUrl, UrlResolver,
 };
 use worker::*;
 
@@ -198,6 +199,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
             UrlResolver::Instagram(SnapUrlResolver::new(&http_client, &platform))
         }
         Platform::Shorts => UrlResolver::Shorts(ShortsUrlResolver::new(&http_client)),
+        Platform::Twitter => UrlResolver::Twitter(TwitterUrlResolver::new(&http_client)),
     };
 
     let url = match resolver.resolve_url(url.as_str()).await {
@@ -228,16 +230,6 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
-    if let Err(err) = tg_client
-        .delete_message(&DeleteMessage {
-            chat_id: chat.id,
-            message_id: message_to_edit.message_id.unwrap(),
-        })
-        .await
-    {
-        console_error!("{err}");
-    }
-
     let video = tg_client
         .send_video(&telegram::SendVideo {
             chat_id: chat.id,
@@ -253,6 +245,16 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
             },
             |it| it.video,
         );
+
+    if let Err(err) = tg_client
+        .delete_message(&DeleteMessage {
+            chat_id: chat.id,
+            message_id: message_to_edit.message_id.unwrap(),
+        })
+        .await
+    {
+        console_error!("{err}");
+    }
 
     if let (Some(db), Some(video)) = (&db, &video) {
         if let Err(err) = db.insert_video_file_id(&message_text, &video.file_id).await {
