@@ -2,5 +2,10 @@ name = "snaptik-bot"
 main = "build/worker/shim.mjs"
 compatibility_date = "2023-06-28"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "snaptik-bot"
+database_id = "1d6e7dd9-2490-484b-891e-cd03d77cf87f"
+
 [build]
 command = "cargo install -q worker-build && worker-build --release"

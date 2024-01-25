@@ -153,12 +153,12 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     }
 
     if let Some(db) = &db {
-        match db.get_video_file_id(&message_text).await {
-            Ok(Some(file_id)) => {
+        match db.get_video(&message_text).await {
+            Ok(Some(video)) => {
                 if let Err(err) = tg_client
                     .send_video(&telegram::SendVideo {
                         chat_id: chat.id,
-                        video: file_id,
+                        video: video.file_id,
                         reply_to_message_id: update.message_id,
                         caption: Some(message_text.clone()),
                     })
@@ -257,7 +257,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
     }
 
     if let (Some(db), Some(video)) = (&db, &video) {
-        if let Err(err) = db.insert_video_file_id(&message_text, &video.file_id).await {
+        if let Err(err) = db.insert_video(&message_text, &video.file_id).await {
             console_error!("`db.insert_video_file_id` error: {err}")
         }
     };

@@ -1,50 +1,46 @@
-use anyhow::Result;
-use libsql_client::Statement;
-use worker::{console_error, Env};
+use anyhow::{anyhow, Result};
+use serde::Deserialize;
+use worker::{console_error, D1Database, Env};
 
-#[derive(Debug)]
 pub struct Db {
-    client: libsql_client::Client,
+    db: D1Database,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Video {
+    pub url: String,
+    pub file_id: String,
 }
 
 impl Db {
     pub fn new(env: &Env) -> Option<Self> {
-        libsql_client::Client::from_workers_env(env).map_or_else(
-            |e| {
-                console_error!("Cannot connect to db: {e}");
+        env.d1("DB").map_or_else(
+            |err| {
+                console_error!("{err}");
                 None
             },
-            |client| Some(Self { client }),
+            |db| Some(Self { db }),
         )
     }
 
-    pub async fn get_video_file_id(&self, url: &str) -> Result<Option<String>> {
-        let result = self
-            .client
-            .execute(Statement::with_args(
-                "SELECT (file_id) FROM videos WHERE url = ? LIMIT 1",
-                &[url],
-            ))
-            .await?;
-
-        if result.rows.is_empty() {
-            return Ok(None);
-        }
-
-        result.rows[0]
-            .try_get::<&str>(0)
-            .map(|it| Some(it.to_string()))
+    pub async fn get_video(&self, url: &str) -> Result<Option<Video>> {
+        self.db
+            .prepare("SELECT * FROM videos WHERE url = ?1")
+            .bind(&[url.into()])
+            .map_err(|err| anyhow!(err.to_string()))?
+            .first::<Video>(None)
+            .await
+            .map_err(|err| anyhow!(err.to_string()))
     }
 
-    pub async fn insert_video_file_id(&self, url: &str, file_id: &str) -> Result<bool> {
-        Ok(self
-            .client
-            .execute(Statement::with_args(
-                "INSERT INTO videos VALUES (?, ?)",
-                &[url, file_id],
-            ))
-            .await?
-            .rows_affected
-            == 1)
+    pub async fn insert_video(&self, url: &str, file_id: &str) -> Result<bool> {
+        self.db
+            .prepare("INSERT INTO videos VALUES (?1, ?2)")
+            .bind(&[url.into(), file_id.into()])
+            .map_err(|err| anyhow!(err.to_string()))?
+            .run()
+            .await
+            .map_err(|err| anyhow!(err.to_string()))
+            .map(|it| it.success())
     }
 }
