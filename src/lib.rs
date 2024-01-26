@@ -184,7 +184,7 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     }
 
-    let platform = match Platform::new(url.host_str()) {
+    let platform = match Platform::new(&url) {
         Ok(url) => url,
         Err(err) => {
             console_error!("{err}: {url}");

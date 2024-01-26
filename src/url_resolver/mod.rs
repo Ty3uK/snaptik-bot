@@ -2,7 +2,7 @@ pub mod shorts;
 pub mod snap;
 pub mod twitter;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use url::Url;
 
 use self::{shorts::ShortsUrlResolver, snap::SnapUrlResolver, twitter::TwitterUrlResolver};
@@ -16,14 +16,20 @@ pub enum Platform {
 }
 
 impl Platform {
-    pub fn new(url: Option<&str>) -> Result<Self> {
-        match url {
-            Some(url) if url.ends_with("tiktok.com") => Ok(Self::TikTok),
-            Some(url) if url.ends_with("instagram.com") => Ok(Self::Instagram),
-            Some(url) if url.ends_with("youtube.com") => Ok(Self::Shorts),
-            Some(url) if url.ends_with("twitter.com") => Ok(Self::Twitter),
-            Some(url) if url.ends_with("x.com") => Ok(Self::Twitter),
-            _ => bail!("This kind of link is not supported yet."),
+    pub fn new(url: &Url) -> Result<Self> {
+        let host = url.host_str().ok_or(anyhow!("Cannot get URL host"))?;
+        if host.ends_with("tiktok.com") {
+            Ok(Self::TikTok)
+        } else if host.ends_with("instagram.com") {
+            Ok(Self::Instagram)
+        } else if host.ends_with("youtube.com") {
+            Ok(Self::Shorts)
+        } else if host.ends_with("twitter.com") {
+            Ok(Self::Twitter)
+        } else if host.ends_with("x.com") {
+            Ok(Self::Twitter)
+        } else {
+            bail!("This kind of link is not supported yet.")
         }
     }
 }
