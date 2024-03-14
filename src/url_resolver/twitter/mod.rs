@@ -1,21 +1,16 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail};
 use reqwest::Client;
-
-mod util;
-use serde::Deserialize;
 use url::Url;
-use util::DOWNLOAD_LINK_REGEX;
+
+use self::util::DOWNLOAD_LINK_REGEX;
 
 use super::ResolveUrl;
+
+mod util;
 
 #[derive(Debug)]
 pub struct TwitterUrlResolver<'a> {
     http_client: &'a Client,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Response {
-    data: Option<String>,
 }
 
 impl<'a> TwitterUrlResolver<'a> {
@@ -25,25 +20,24 @@ impl<'a> TwitterUrlResolver<'a> {
 }
 
 impl<'a> ResolveUrl<'a> for TwitterUrlResolver<'a> {
-    async fn resolve_url(&self, url: &'a str) -> Result<url::Url> {
-        let json = self.http_client.post("https://savetwitter.net/api/ajaxSearch")
+    async fn resolve_url(&self, url: &'a str) -> anyhow::Result<url::Url> {
+        let html = self.http_client.post("https://savetwitter.net/api/ajaxSearch")
             .form(&[
                 ("q", url),
                 ("lang", "en")
             ])
-            .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0")
-            .header("Referer", "https://savetwitter.net")
+            .header("Referer", "https://savetwitter.net/")
+            .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0")
             .send()
             .await?
-            .json::<Response>()
+            .text()
             .await
             .map_err(|err| anyhow!(err))?;
-        let data = json.data.ok_or(anyhow!("Cannot read `data` field"))?;
         let capts = DOWNLOAD_LINK_REGEX
-            .captures(&data)
-            .ok_or(anyhow!("Cannot find download link."))?;
+            .captures(&html)
+            .ok_or(anyhow!("Cannot find URL"))?;
         if capts.len() < 2 {
-            bail!("Cannot find download link");
+            bail!("Cannot find URL");
         }
         Url::parse(&capts[1]).map_err(|err| anyhow!(err))
     }

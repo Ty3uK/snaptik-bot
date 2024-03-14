@@ -2,7 +2,7 @@ use db::Db;
 use serde::{Deserialize, Serialize};
 use url_resolver::{
     shorts::ShortsUrlResolver, snap::SnapUrlResolver, twitter::TwitterUrlResolver, Platform,
-    ResolveUrl, UrlResolver,
+    ResolveUrl,
 };
 use worker::*;
 
@@ -193,16 +193,31 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
-    let resolver: UrlResolver = match platform {
-        Platform::TikTok => UrlResolver::TikTok(SnapUrlResolver::new(&http_client, &platform)),
-        Platform::Instagram => {
-            UrlResolver::Instagram(SnapUrlResolver::new(&http_client, &platform))
+    let url = url.as_str();
+    let url = match platform {
+        Platform::TikTok => {
+            SnapUrlResolver::new(&http_client, &platform)
+                .resolve_url(url)
+                .await
         }
-        Platform::Shorts => UrlResolver::Shorts(ShortsUrlResolver::new(&http_client)),
-        Platform::Twitter => UrlResolver::Twitter(TwitterUrlResolver::new(&http_client)),
+        Platform::Instagram => {
+            SnapUrlResolver::new(&http_client, &platform)
+                .resolve_url(url)
+                .await
+        }
+        Platform::Shorts => {
+            ShortsUrlResolver::new(&http_client)
+                .resolve_url(url)
+                .await
+        }
+        Platform::Twitter => {
+            TwitterUrlResolver::new(&http_client)
+                .resolve_url(url)
+                .await
+        }
     };
 
-    let url = match resolver.resolve_url(url.as_str()).await {
+    let url = match url {
         Ok(mut url) => {
             let query_pairs: Vec<_> = url
                 .query_pairs()
