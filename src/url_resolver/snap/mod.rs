@@ -21,10 +21,6 @@ impl<'a> SnapUrlResolver<'a> {
     }
 
     async fn get_token(&self) -> Result<String> {
-        if matches!(self.platform, Platform::Instagram) {
-            return Ok("".to_string());
-        }
-
         let html = self
             .client
             .get("https://snaptik.app/en")
