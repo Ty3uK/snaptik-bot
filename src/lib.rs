@@ -205,16 +205,8 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
                 .resolve_url(url)
                 .await
         }
-        Platform::Shorts => {
-            ShortsUrlResolver::new(&http_client)
-                .resolve_url(url)
-                .await
-        }
-        Platform::Twitter => {
-            TwitterUrlResolver::new(&http_client)
-                .resolve_url(url)
-                .await
-        }
+        Platform::Shorts => ShortsUrlResolver::new(&http_client).resolve_url(url).await,
+        Platform::Twitter => TwitterUrlResolver::new(&http_client).resolve_url(url).await,
     };
 
     let url = match url {
@@ -252,14 +244,27 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
             reply_to_message_id: update.message_id,
             caption: Some(message_text.clone()),
         })
-        .await
-        .map_or_else(
-            |err| {
+        .await;
+
+    if let Err(err) = &video {
+        if err.to_string() == "Bad Request: wrong file identifier/HTTP URL specified" {
+            if let Err(err) = tg_client
+                .edit_message_text(&EditMessageText {
+                    chat_id: chat.id,
+                    message_id: message_to_edit.message_id,
+                    text: "❌ Video is too large to send it.".to_string(),
+                })
+                .await
+            {
                 console_error!("{err}");
-                None
-            },
-            |it| it.video,
-        );
+            }
+            return Response::ok("");
+        } else {
+            console_error!("{err}");
+        }
+    }
+
+    let video = video.unwrap().video;
 
     if let Err(err) = tg_client
         .delete_message(&DeleteMessage {
