@@ -237,6 +237,8 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
+    console_debug!("{url}");
+
     let video = tg_client
         .send_video(&telegram::SendVideo {
             chat_id: chat.id,
@@ -246,25 +248,30 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         })
         .await;
 
-    if let Err(err) = &video {
-        if err.to_string() == "Bad Request: wrong file identifier/HTTP URL specified" {
-            if let Err(err) = tg_client
-                .edit_message_text(&EditMessageText {
-                    chat_id: chat.id,
-                    message_id: message_to_edit.message_id,
-                    text: "❌ Video is too large to send it.".to_string(),
-                })
-                .await
-            {
-                console_error!("{err}");
-            }
-            return Response::ok("");
+    if let Err(err) = video {
+        console_error!("{err}");
+
+        let message = if err.to_string() == "Bad Request: wrong file identifier/HTTP URL specified"
+        {
+            "❌ Video is too large to send it.".to_string()
         } else {
+            "❌ Cannot process video.".to_string()
+        };
+        if let Err(err) = tg_client
+            .edit_message_text(&EditMessageText {
+                chat_id: chat.id,
+                message_id: message_to_edit.message_id,
+                text: message,
+            })
+            .await
+        {
             console_error!("{err}");
         }
+
+        return Response::ok("");
     }
 
-    let video = video.unwrap().video;
+    let video = video.map(|it| it.video).unwrap();
 
     if let Err(err) = tg_client
         .delete_message(&DeleteMessage {
