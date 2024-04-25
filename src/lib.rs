@@ -237,8 +237,6 @@ async fn process_update(mut req: Request, ctx: RouteContext<RouterData>) -> Resu
         }
     };
 
-    console_debug!("{url}");
-
     let video = tg_client
         .send_video(&telegram::SendVideo {
             chat_id: chat.id,
