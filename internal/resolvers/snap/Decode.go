@@ -23,11 +23,11 @@ func Decode(h string, _ int, n string, t uint64, e int, _ int) (string, error) {
 			result += s
 			continue
 		}
-		p, err := strconv.ParseInt(s, e, 0)
+		p, err := strconv.ParseUint(s, e, 0)
 		if err != nil {
 			return "", err
 		}
-		result += string(rune(p - int64(t)))
+		result += string(rune(p - t))
 	}
 
 	return result, nil
