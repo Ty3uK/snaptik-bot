@@ -3,7 +3,6 @@ package twitter
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -15,10 +14,9 @@ import (
 var DOWNLOAD_LINK_REGEXP = regexp.MustCompile(`<a.+?href=\\?"(.+?)\\?"`)
 
 type twitterResponse struct {
-	Status     string  `json:"status"`
-	StatusCode *int    `json:"statusCode"`
-	Data       *string `json:"data"`
-	Message    *string `json:"msg"`
+	Status  string  `json:"status"`
+	Data    *string `json:"data"`
+	Message *string `json:"msg"`
 }
 
 type TwitterResolver struct {
@@ -54,13 +52,8 @@ func (r *TwitterResolver) ResolveUrl(sourceUrl string) (*string, error) {
 	}
 
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot read response body: %e", err)
-	}
-
 	var data twitterResponse
-	err = json.Unmarshal(body, &data)
+	err = json.NewDecoder(res.Body).Decode(&data)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot unmarshal response body: %e", err)
 	}
@@ -74,5 +67,6 @@ func (r *TwitterResolver) ResolveUrl(sourceUrl string) (*string, error) {
 		return nil, fmt.Errorf("Cannot find link: %s", *data.Data)
 	}
 
-	return &matches[1], nil
+	result := strings.Clone(matches[1])
+	return &result, nil
 }
