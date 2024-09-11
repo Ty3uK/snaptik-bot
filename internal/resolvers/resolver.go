@@ -1,5 +1,5 @@
 package resolvers
 
 type Resolver interface {
-	ResolveUrl(url string) (*string, error)
+	ResolveUrl(sourceUrl string) (*string, error)
 }

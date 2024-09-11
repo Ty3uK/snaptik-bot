@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Ty3uK/snaptik-bot/internal/platform"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
 )
 
@@ -19,10 +20,10 @@ var RESULT_VIDEO_URL_REGEXP = regexp.MustCompile(`href=\\?"(https://(.*?\.)?(sna
 
 type SnapResolver struct {
 	httpClient *http.Client
-	platform   resolvers.Platform
+	platform   platform.Platform
 }
 
-func NewSnapResolver(httpClient *http.Client, platform resolvers.Platform) resolvers.Resolver {
+func NewSnapResolver(httpClient *http.Client, platform platform.Platform) resolvers.Resolver {
 	return &SnapResolver{
 		httpClient: httpClient,
 		platform:   platform,
@@ -129,9 +130,9 @@ func (r *SnapResolver) getToken() (*string, error) {
 
 func (r *SnapResolver) getEndpoint() string {
 	switch r.platform {
-	case resolvers.TikTok:
+	case platform.PlatformTikTok:
 		return "https://snaptik.app/abc2.php"
-	case resolvers.Instagram:
+	case platform.PlatformInstagram:
 		return "https://snapinsta.app/action2.php"
 	default:
 		return ""
@@ -140,9 +141,9 @@ func (r *SnapResolver) getEndpoint() string {
 
 func (r *SnapResolver) getReferer() string {
 	switch r.platform {
-	case resolvers.TikTok:
+	case platform.PlatformTikTok:
 		return "https://snaptik.app/"
-	case resolvers.Instagram:
+	case platform.PlatformInstagram:
 		return "https://snapinsta.app/"
 	default:
 		return ""
