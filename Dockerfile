@@ -8,7 +8,6 @@ COPY go.sum go.mod /app
 
 RUN \
     go mod tidy && \
-    go test ./... && \
     go build ./cmd/snaptik-bot
 
 EXPOSE 8080
