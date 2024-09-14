@@ -7,10 +7,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 jobs:
-  build-go:
-    uses: Ty3uK/snaptik-bot/.github/workflows/build-go.yaml@golang
   build-and-push-image:
-    needs: build-go
     runs-on: ubuntu-latest
     permissions:
       contents: read
