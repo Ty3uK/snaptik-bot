@@ -1,7 +1,9 @@
 name: Build and test binary
 on:
-  - push
-  - workflow_call
+  push:
+    tags-ignore:
+      - '*'
+  workflow_call: {}
 jobs:
   build:
     runs-on: ubuntu-latest
