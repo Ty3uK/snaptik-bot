@@ -12,6 +12,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/db"
 	"github.com/Ty3uK/snaptik-bot/internal/mp4"
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
+	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/shorts"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
@@ -67,11 +68,18 @@ func main() {
 		},
 	}
 
+	log.Println("Generating secret token.")
+	secretToken, err := random.GetRandomString(64)
+	if err != nil {
+		log.Printf("Cannot create secret token: %s", err)
+	}
+
 	tgClient := telegram.NewTelegramClient(botToken, &httpClient)
 
 	log.Println("Settings webhook.")
 	res, err := tgClient.SetWebook(&telegram.SetWebhook{
-		Url: fmt.Sprintf("%s/api/update", webhookUrl),
+		Url:         fmt.Sprintf("%s/api/update", webhookUrl),
+		SecretToken: secretToken,
 	})
 	if err != nil {
 		log.Fatalf("Cannot set webhook: %s\n", err)
@@ -83,6 +91,12 @@ func main() {
 	http.HandleFunc("/api/update", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		if secretToken != nil && r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != *secretToken {
+			log.Println("Cannot validate X-Telegram-Bot-Api-Secret-Token")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 

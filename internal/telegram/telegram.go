@@ -21,7 +21,8 @@ const (
 )
 
 type SetWebhook struct {
-	Url string `json:"url"`
+	Url         string  `json:"url"`
+	SecretToken *string `json:"secret_token,omitempty"`
 }
 
 type Chat struct {
@@ -100,14 +101,14 @@ type Response[T any] struct {
 }
 
 type TelegramClient struct {
-	httpClient *http.Client
-	apiPath    string
+	httpClient  *http.Client
+	apiPath     string
 }
 
-func NewTelegramClient(token string, httpClient *http.Client) TelegramClient {
+func NewTelegramClient(botToken string, httpClient *http.Client) TelegramClient {
 	return TelegramClient{
-		apiPath:    fmt.Sprintf("https://api.telegram.org/bot%s", token),
-		httpClient: httpClient,
+		apiPath:     fmt.Sprintf("https://api.telegram.org/bot%s", botToken),
+		httpClient:  httpClient,
 	}
 }
 
