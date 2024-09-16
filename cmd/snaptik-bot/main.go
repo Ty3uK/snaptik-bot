@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -42,6 +41,10 @@ func main() {
 	if webhookUrl == "" {
 		log.Fatalf("No `WEBHOOK_URL` environment variable is found.\n")
 	}
+	parsedWebhookUrl, err := url.Parse(webhookUrl)
+	if err != nil {
+		log.Fatalf("Cannot parse webhook url: %s", err)
+	}
 
 	botToken := os.Getenv("BOT_TOKEN")
 	if botToken == "" {
@@ -78,7 +81,7 @@ func main() {
 
 	log.Println("Settings webhook.")
 	res, err := tgClient.SetWebook(&telegram.SetWebhook{
-		Url:         fmt.Sprintf("%s/api/update", webhookUrl),
+		Url:         webhookUrl,
 		SecretToken: secretToken,
 	})
 	if err != nil {
@@ -88,7 +91,7 @@ func main() {
 		log.Fatalf("Cannot set webhook: %t", *res)
 	}
 
-	http.HandleFunc("/api/update", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(parsedWebhookUrl.Path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
