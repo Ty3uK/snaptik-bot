@@ -21,14 +21,17 @@ func ParseResolution(reader io.ReadSeeker) (*Resolution, error) {
 	buffer := make([]byte, 8)
 	for {
 		_, err := reader.Read(buffer)
-		if err == io.EOF {
-			return nil, nil
-		}
 		if err != nil {
+			if err == io.EOF {
+				return nil, nil
+			}
 			return nil, fmt.Errorf("Cannot read boxSize: %s", err)
 		}
 		box.size = int64(binary.BigEndian.Uint32(buffer[0:4]))
 		box.name = string(buffer[4:8])
+		if box.size == 0 || box.name == "" {
+			return nil, fmt.Errorf("Cannot parse box")
+		}
 		if box.name == "tkhd" {
 			resolution, err := parseTkhdBox(reader, &buffer, &box)
 			if err != nil {
