@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"go.uber.org/zap"
 )
@@ -137,9 +136,6 @@ func (client *TelegramClient) SendVideo(sendVideo *SendVideo) (*Message, error) 
 }
 
 func (client *TelegramClient) SendVideoFile(video *SendVideoFile) (*Message, error) {
-	buffer := bufferPool.Get().(*[]byte)
-	defer bufferPool.Put(buffer)
-
 	r, w := io.Pipe()
 	form := multipart.NewWriter(w)
 
@@ -166,7 +162,7 @@ func (client *TelegramClient) SendVideoFile(video *SendVideoFile) (*Message, err
 			return
 		}
 
-		_, err = io.CopyBuffer(file, *video.Video, *buffer)
+		_, err = io.Copy(file, *video.Video)
 		if err != nil {
 			w.CloseWithError(err)
 			client.logger.Errorf("Cannot write video: %s", err)
@@ -232,11 +228,4 @@ func sendRequest[I any, O any](client *TelegramClient, method string, request *I
 	}
 
 	return response.Result, nil
-}
-
-var bufferPool = sync.Pool{
-	New: func() any {
-		buffer := make([]byte, 32*1024)
-		return &buffer
-	},
 }

@@ -33,7 +33,6 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 	}
 
 	contentLength = contentLength / 1024 / 1024
-	logger.Infof("Content-Length: %dMB", contentLength)
 	if contentLength >= 50 {
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
@@ -44,7 +43,10 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
 	}
 
-	contentType := http.DetectContentType(meta)
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "video/mp4" {
+		contentType = http.DetectContentType(meta)
+	}
 	if contentType != "video/mp4" {
 		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}
