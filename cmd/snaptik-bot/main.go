@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/Ty3uK/snaptik-bot/internal/db"
-	"github.com/Ty3uK/snaptik-bot/internal/mp4"
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
 	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
@@ -144,6 +143,7 @@ func main() {
 		}
 
 		if message.Text == nil {
+			// TODO: send message "only text links allowed"
 			logger.Errorw("update.message.text == nil", "message", message)
 			w.WriteHeader(http.StatusOK)
 			return
@@ -289,22 +289,11 @@ func main() {
 			return
 		}
 
-		res, err := mp4.Fetch(&httpClient, *targetUrl)
-		if err != nil {
-			logger.Errorw("Cannot parse target url", "error", err, "source_url", messageText, "target_url", *targetUrl)
-			SendCannotProcessVideoMessage()
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		video, err := tgClient.SendVideoFile(&telegram.SendVideoFile{
+		video, err := tgClient.SendVideo(&telegram.SendVideo{
 			ChatId:           chat.Id,
-			Video:            &res.Body,
-			VideoMeta:        res.Meta,
-			ReplyToMessageId: *message.MessageId,
-			Caption:          messageText,
-			Width:            res.Resolution.Width,
-			Height:           res.Resolution.Height,
+			ReplyToMessageId: message.MessageId,
+			Caption:          &messageText,
+			Video:            *targetUrl,
 		})
 		if err != nil {
 			logger.Errorw("Cannot send video", "error", err, "source_url", messageText, "target_url", *targetUrl)
