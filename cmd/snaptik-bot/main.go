@@ -56,8 +56,13 @@ func main() {
 		listenAddress = ":8080"
 	}
 
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		listenAddress = "./db.sqlite3"
+	}
+
 	log.Println("Opening database.")
-	dbClient, err := db.NewDbClient()
+	dbClient, err := db.NewDbClient(dbPath)
 	if err != nil {
 		log.Fatalf("Cannot create db client: %s", err)
 	}

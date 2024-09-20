@@ -16,8 +16,8 @@ type Video struct {
 	FileId string `json:"file_id"`
 }
 
-func NewDbClient() (*DbClient, error) {
-	db, err := sql.Open("sqlite3", "db.sqlite3")
+func NewDbClient(dbPath string) (*DbClient, error) {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot open db: %e", err)
 	}
