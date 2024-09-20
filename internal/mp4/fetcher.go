@@ -37,7 +37,7 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
-	meta := make([]byte, 512)
+	meta := make([]byte, 8192)
 	_, err = res.Body.Read(meta)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)

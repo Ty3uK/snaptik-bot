@@ -41,7 +41,7 @@ func ParseResolution(reader io.ReadSeeker) (*Resolution, error) {
 				return resolution, nil
 			}
 		}
-		if box.name == "moov" || box.name == "trak" {
+		if box.name == "moov" || box.name == "trak" || box.name == "tkhd" {
 			continue
 		}
 		_, err = reader.Seek(box.size-8, io.SeekCurrent)
