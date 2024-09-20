@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 
+	_ "net/http/pprof"
+
 	"github.com/Ty3uK/snaptik-bot/internal/db"
 	"github.com/Ty3uK/snaptik-bot/internal/mp4"
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
@@ -72,7 +74,7 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		listenAddress = "./db.sqlite3"
+		dbPath = "./db.sqlite3"
 	}
 
 	logger.Infoln("Opening database.")
