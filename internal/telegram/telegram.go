@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"strconv"
+
+	"go.uber.org/zap"
 )
 
 type ChatType string
@@ -101,14 +102,16 @@ type Response[T any] struct {
 }
 
 type TelegramClient struct {
-	httpClient  *http.Client
-	apiPath     string
+	apiPath    string
+	httpClient *http.Client
+	logger     *zap.SugaredLogger
 }
 
-func NewTelegramClient(botToken string, httpClient *http.Client) TelegramClient {
+func NewTelegramClient(botToken string, httpClient *http.Client, logger *zap.SugaredLogger) TelegramClient {
 	return TelegramClient{
-		apiPath:     fmt.Sprintf("https://api.telegram.org/bot%s", botToken),
-		httpClient:  httpClient,
+		apiPath:    fmt.Sprintf("https://api.telegram.org/bot%s", botToken),
+		httpClient: httpClient,
+		logger:     logger,
 	}
 }
 
@@ -149,19 +152,19 @@ func (client *TelegramClient) SendVideoFile(video *SendVideoFile) (*Message, err
 
 		file, err := form.CreateFormFile("video", "video.mp4")
 		if err != nil {
-			log.Printf("Cannot create file field: %s", err)
+			client.logger.Errorf("Cannot create file field: %s", err)
 			return
 		}
 
 		_, err = file.Write(*video.VideoMeta)
 		if err != nil {
-			log.Printf("Cannot write video meta: %s", err)
+			client.logger.Errorf("Cannot write video meta: %s", err)
 			return
 		}
 
 		_, err = io.Copy(file, *video.Video)
 		if err != nil {
-			log.Printf("Cannot write video: %s", err)
+			client.logger.Errorf("Cannot write video: %s", err)
 			return
 		}
 	}()
