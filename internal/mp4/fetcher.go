@@ -29,6 +29,11 @@ func Fetch(httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
 	}
 
+	contentType := http.DetectContentType(meta)
+	if contentType != "video/mp4" {
+		return nil, fmt.Errorf("Bad content type: %s", contentType)
+	}
+
 	resolution, err := ParseResolution(bytes.NewReader(meta))
 	if err != nil || resolution == nil {
 		return nil, fmt.Errorf("Cannot parse resolution: %s", err)

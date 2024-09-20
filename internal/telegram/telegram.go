@@ -221,7 +221,8 @@ func sendRequest[I any, O any](client *TelegramClient, method string, request *I
 	}
 
 	if !response.Ok {
-		return nil, fmt.Errorf("Bad response from %s: %+v", method, response)
+		err, _ := json.Marshal(response)
+		return nil, fmt.Errorf("Bad response from %s: %s", method, err)
 	}
 
 	return response.Result, nil

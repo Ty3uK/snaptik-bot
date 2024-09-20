@@ -143,6 +143,11 @@ func main() {
 			return
 		}
 
+		if message.Text == nil {
+			logger.Errorw("update.message.text == nil", "message", message)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		messageText := *message.Text
 
 		if messageText == "" {
@@ -185,7 +190,7 @@ func main() {
 			ReplyToMessageId: message.MessageId,
 		})
 		if err != nil {
-			logger.Errorf("Cannot send message: %s", err)
+			logger.Errorw("Cannot send message", "error", err)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
