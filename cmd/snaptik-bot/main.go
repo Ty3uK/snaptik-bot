@@ -289,7 +289,7 @@ func main() {
 			return
 		}
 
-		res, err := mp4.Fetch(&httpClient, *targetUrl)
+		res, err := mp4.Fetch(&httpClient, logger, *targetUrl)
 		if err != nil {
 			logger.Errorw("Cannot parse target url", "error", err, "source_url", messageText, "target_url", *targetUrl)
 			SendCannotProcessVideoMessage()

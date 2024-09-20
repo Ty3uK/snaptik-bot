@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type FetchResponse struct {
@@ -15,7 +17,7 @@ type FetchResponse struct {
 	Body       io.ReadCloser
 }
 
-func Fetch(httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
+func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string) (*FetchResponse, error) {
 	// Workaround for partially encoded query params
 	sourceUrl = strings.ReplaceAll(sourceUrl, " ", "%20")
 
@@ -29,7 +31,10 @@ func Fetch(httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot parse Content-Length: %s", err)
 	}
-	if contentLength > 50 * 1024 * 1024 {
+
+	contentLength = contentLength / 1024 / 1024
+	logger.Infof("Content-Length: %dMB", contentLength)
+	if contentLength >= 50 {
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
