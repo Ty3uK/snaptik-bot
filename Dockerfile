@@ -15,6 +15,5 @@ RUN \
 FROM alpine:latest AS runner
 WORKDIR /app
 RUN apk --no-cache add ca-certificates tzdata libc6-compat libgcc libstdc++
-COPY --from=builder /app/snaptik-bot /app
-EXPOSE 8080
+COPY --from=builder /app/snaptik-bot /app/snaptik-bot
 CMD ["/app/snaptik-bot"]
