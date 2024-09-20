@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type FetchResponse struct {
@@ -14,6 +15,9 @@ type FetchResponse struct {
 }
 
 func Fetch(httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
+	// Workaround for partially encoded query params
+	sourceUrl = strings.ReplaceAll(sourceUrl, " ", "%20")
+
 	res, err := http.Get(sourceUrl)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot make request: %s", err)
