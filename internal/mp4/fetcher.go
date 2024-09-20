@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +22,15 @@ func Fetch(httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
 	res, err := http.Get(sourceUrl)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot make request: %s", err)
+	}
+
+	contentLengthStr := res.Header.Get("Content-Length")
+	contentLength, err := strconv.Atoi(contentLengthStr)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot parse Content-Length: %s", err)
+	}
+	if contentLength > 50 * 1024 * 1024 {
+		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
 	meta := make([]byte, 512)

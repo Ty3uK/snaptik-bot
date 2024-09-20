@@ -194,7 +194,8 @@ func (client *TelegramClient) SendVideoFile(video *SendVideoFile) (*Message, err
 	}
 
 	if !response.Ok {
-		return nil, fmt.Errorf("Bad response from sendVideo: %+v", response)
+		err, _ := json.Marshal(response)
+		return nil, fmt.Errorf("Bad response from sendVideo: %s", err)
 	}
 
 	return response.Result, nil
