@@ -320,7 +320,7 @@ func main() {
 		if video != nil && video.Video != nil {
 			_, err = dbClient.InsertVideo(messageText, video.Video.FileId)
 			if err != nil {
-				logger.Errorf("Cannot insert video to db: %s", err)
+				logger.Errorw("Cannot insert video to db: %s", "error", err, "source_url", messageText, "file_id", video.Video.FileId)
 			}
 		}
 
