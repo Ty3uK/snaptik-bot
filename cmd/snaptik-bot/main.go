@@ -19,6 +19,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/twitter"
 	"github.com/Ty3uK/snaptik-bot/internal/telegram"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -31,6 +32,7 @@ I'm a bot that can download video from:
 - TikTok
 - Instagram
 - Youtube Shorts
+- Twitter (X)
 
 Just send me a link and I'll send a video back to you 💪
 
@@ -326,6 +328,8 @@ func main() {
 
 		w.WriteHeader(http.StatusOK)
 	})
+
+	http.Handle("/metrics", promhttp.Handler())
 
 	logger.Infof("Starting server at %s", listenAddress)
 	logger.Fatal(http.ListenAndServe(listenAddress, nil))
