@@ -40,6 +40,7 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 	meta := make([]byte, 32 * 1024)
 	_, err = res.Body.Read(meta)
 	if err != nil {
+		defer res.Body.Close()
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
 	}
 
@@ -48,11 +49,13 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 		contentType = http.DetectContentType(meta)
 	}
 	if contentType != "video/mp4" {
+		defer res.Body.Close()
 		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}
 
 	resolution, err := ParseResolution(bytes.NewReader(meta))
 	if err != nil || resolution == nil {
+		defer res.Body.Close()
 		return nil, fmt.Errorf("Cannot parse resolution: %s", err)
 	}
 
