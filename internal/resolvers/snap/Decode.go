@@ -8,7 +8,8 @@ import (
 )
 
 func Decode(h string, _ int, n string, t uint64, e int, _ int) (string, error) {
-	result := ""
+	var result strings.Builder
+	replaces := []string{}
 
 	for i := 0; i < len(h); i++ {
 		s := ""
@@ -16,19 +17,23 @@ func Decode(h string, _ int, n string, t uint64, e int, _ int) (string, error) {
 			s += string(h[i])
 			i++
 		}
+
+		replaces = []string{}
 		for j := 0; j < len(n); j++ {
-			s = strings.ReplaceAll(s, string(n[j]), fmt.Sprint(j))
+			replaces = append(replaces, string(n[j]), fmt.Sprint(j))
 		}
+		s = strings.NewReplacer(replaces...).Replace(s)
+
 		if !unicode.IsDigit(rune(s[0])) {
-			result += s
+			result.WriteString(s)
 			continue
 		}
 		p, err := strconv.ParseUint(s, e, 0)
 		if err != nil {
 			return "", err
 		}
-		result += string(rune(p - t))
+		result.WriteRune(rune(p - t))
 	}
 
-	return result, nil
+	return result.String(), nil
 }
