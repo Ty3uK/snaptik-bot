@@ -1,6 +1,7 @@
 package twitter
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,12 +30,12 @@ func NewTwitterResolver(httpClient *http.Client) resolvers.Resolver {
 	}
 }
 
-func (r *TwitterResolver) ResolveUrl(sourceUrl string) (*string, error) {
+func (r *TwitterResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*string, error) {
 	form := url.Values{}
 	form.Set("q", sourceUrl)
 	form.Set("lang", "en")
 
-	req, err := http.NewRequest("POST", "https://savetwitter.net/api/ajaxSearch", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://savetwitter.net/api/ajaxSearch", strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create new request: %e", err)
 	}

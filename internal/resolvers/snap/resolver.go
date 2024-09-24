@@ -2,6 +2,7 @@ package snap
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -30,8 +31,8 @@ func NewSnapResolver(httpClient *http.Client, platform platform.Platform) resolv
 	}
 }
 
-func (resolver *SnapResolver) ResolveUrl(sourceUrl string) (*string, error) {
-	token, err := resolver.getToken()
+func (resolver *SnapResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*string, error) {
+	token, err := resolver.getToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot get token: %e", err)
 	}
@@ -47,7 +48,7 @@ func (resolver *SnapResolver) ResolveUrl(sourceUrl string) (*string, error) {
 		return nil, fmt.Errorf("Cannot close multipart.Writer: %e", err)
 	}
 
-	req, err := http.NewRequest("POST", resolver.getEndpoint(), bytes.NewReader(form.Bytes()))
+	req, err := http.NewRequestWithContext(ctx, "POST", resolver.getEndpoint(), bytes.NewReader(form.Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %e", err)
 	}
@@ -92,10 +93,10 @@ func (resolver *SnapResolver) ResolveUrl(sourceUrl string) (*string, error) {
 	return &result, nil
 }
 
-func (r *SnapResolver) getToken() (*string, error) {
+func (r *SnapResolver) getToken(ctx context.Context) (*string, error) {
 	referer := r.getReferer()
 
-	req, err := http.NewRequest("GET", referer, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", referer, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %e", err)
 	}

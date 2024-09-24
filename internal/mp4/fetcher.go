@@ -2,13 +2,12 @@ package mp4
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
-
-	"go.uber.org/zap"
 )
 
 type FetchResponse struct {
@@ -17,11 +16,16 @@ type FetchResponse struct {
 	Body       io.ReadCloser
 }
 
-func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string) (*FetchResponse, error) {
+func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
 	// Workaround for partially encoded query params
 	sourceUrl = strings.ReplaceAll(sourceUrl, " ", "%20")
 
-	res, err := http.Get(sourceUrl)
+	req, err := http.NewRequestWithContext(ctx, "GET", sourceUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Cannot create request: %s", err)
+	}
+
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot make request: %s", err)
 	}
@@ -37,7 +41,7 @@ func Fetch(httpClient *http.Client, logger *zap.SugaredLogger, sourceUrl string)
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
-	meta := make([]byte, 32 * 1024)
+	meta := make([]byte, 32*1024)
 	_, err = res.Body.Read(meta)
 	if err != nil {
 		defer res.Body.Close()

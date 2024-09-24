@@ -1,5 +1,7 @@
 package resolvers
 
+import "context"
+
 type Resolver interface {
-	ResolveUrl(sourceUrl string) (*string, error)
+	ResolveUrl(ctx context.Context, sourceUrl string) (*string, error)
 }

@@ -1,6 +1,7 @@
 package shorts
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,8 +37,8 @@ func NewShortsResolver(httpClient *http.Client) resolvers.Resolver {
 	}
 }
 
-func (r *ShortsResolver) ResolveUrl(sourceUrl string) (*string, error) {
-	authData, err := r.getAuthData()
+func (r *ShortsResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*string, error) {
+	authData, err := r.getAuthData(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot get auth data: %e", err)
 	}
@@ -46,7 +47,7 @@ func (r *ShortsResolver) ResolveUrl(sourceUrl string) (*string, error) {
 	form.Set("csrf_token", authData.csrf)
 	form.Set("url", sourceUrl)
 
-	req, err := http.NewRequest("POST", "https://shortsmate.com/en/download", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://shortsmate.com/en/download", strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %e", err)
 	}
@@ -78,8 +79,8 @@ func (r *ShortsResolver) ResolveUrl(sourceUrl string) (*string, error) {
 	return url, nil
 }
 
-func (r *ShortsResolver) getAuthData() (*authData, error) {
-	req, err := http.NewRequest("GET", "https://shortsmate.com/en/", nil)
+func (r *ShortsResolver) getAuthData(ctx context.Context) (*authData, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://shortsmate.com/en/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %e", err)
 	}

@@ -1,14 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
-
-	_ "net/http/pprof"
+	"os/signal"
+	"syscall"
 
 	"github.com/Ty3uK/snaptik-bot/internal/db"
 	"github.com/Ty3uK/snaptik-bot/internal/mp4"
@@ -20,8 +19,8 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/twitter"
 	"github.com/Ty3uK/snaptik-bot/internal/telegram"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var START_MESSAGE = `
@@ -43,48 +42,30 @@ Creator: @xxxTy3uKxxx
 `
 
 func main() {
-	config := zap.NewProductionConfig()
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	config.Encoding = "console"
-	zapLogger, _ := config.Build()
-	defer func() {
-		err := zapLogger.Sync()
-		if err != nil {
-			log.Print(err)
-		}
+	logger := log.New()
+
+	config, err := parseConfig()
+	if err != nil {
+		logger.WithError(err).Fatal("Cannot parse config")
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGQUIT)
+	defer stop()
+
+	parsedWebhookUrl, err := url.Parse(config.WebhookUrl)
+	if err != nil {
+		logger.WithError(err).Fatal("Cannot parse webhook url.")
+	}
+
+	logger.Info("Opening database.")
+	dbClient, err := db.NewDbClient(config.DbPath)
+	if err != nil {
+		logger.WithError(err).Fatal("Cannot create db client")
+	}
+	go func() {
+		<-ctx.Done()
+		dbClient.Close()
 	}()
-	logger := zapLogger.Sugar()
-
-	webhookUrl := os.Getenv("WEBHOOK_URL")
-	if webhookUrl == "" {
-		logger.Fatalln("No `WEBHOOK_URL` environment variable is found.")
-	}
-	parsedWebhookUrl, err := url.Parse(webhookUrl)
-	if err != nil {
-		logger.Fatalf("Cannot parse webhook url: %s", err)
-	}
-
-	botToken := os.Getenv("BOT_TOKEN")
-	if botToken == "" {
-		logger.Fatalln("No `BOT_TOKEN` environment variable is found.")
-	}
-
-	listenAddress := os.Getenv("LISTEN")
-	if listenAddress == "" {
-		listenAddress = ":8080"
-	}
-
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./db.sqlite3"
-	}
-
-	logger.Infoln("Opening database.")
-	dbClient, err := db.NewDbClient(dbPath)
-	if err != nil {
-		logger.Fatalf("Cannot create db client: %s", err)
-	}
-	defer dbClient.Close()
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
@@ -94,24 +75,28 @@ func main() {
 		},
 	}
 
-	logger.Infoln("Generating secret token.")
+	logger.Info("Generating secret token.")
 	secretToken, err := random.GetRandomString(64)
 	if err != nil {
-		logger.Errorf("Cannot create secret token: %s", err)
+		logger.WithError(err).Error("Cannot create secret token")
 	}
 
-	tgClient := telegram.NewTelegramClient(botToken, &httpClient, logger)
+	tgClient := telegram.NewTelegramClient(config.BotToken, &httpClient, logger)
 
-	logger.Infoln("Settings webhook.")
+	logger.Info("Settings webhook.")
 	res, err := tgClient.SetWebook(&telegram.SetWebhook{
-		Url:         webhookUrl,
+		Url:         config.WebhookUrl,
 		SecretToken: secretToken,
 	})
 	if err != nil {
-		logger.Fatalf("Cannot set webhook: %s", err)
+		logger.WithError(err).Fatal("Cannot set webhook")
 	}
 	if !*res {
-		logger.Fatalf("Cannot set webhook", *res)
+		logger.WithError(err).Fatal("Cannot set webhook")
+	}
+
+	httpServer := &http.Server{
+		Addr: config.ListenAddress,
 	}
 
 	http.HandleFunc(parsedWebhookUrl.Path, func(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +106,7 @@ func main() {
 		}
 
 		if secretToken != nil && r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != *secretToken {
-			logger.Errorln("Cannot validate X-Telegram-Bot-Api-Secret-Token")
+			log.Error("Cannot validate X-Telegram-Bot-Api-Secret-Token")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -130,29 +115,33 @@ func main() {
 		var update telegram.Update
 		err := json.NewDecoder(r.Body).Decode(&update)
 		if err != nil {
-			logger.Errorf("Cannot decode message: %s", err)
+			log.WithError(err).Error("Cannot decode message")
 		}
 
 		message := update.Message
 		if message == nil {
-			logger.Errorln("update.message == nil")
+			log.Error("update.message is nil")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
 		chat := message.Chat
 		if chat == nil {
-			logger.Errorln("update.message.chat == nil")
+			log.Error("update.message.chat is nil")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
 		if message.Text == nil {
-			logger.Errorw("update.message.text == nil", "message", message)
+			log.Error("update.message.text is nil")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		messageText := *message.Text
+
+		logger := logger.WithFields(log.Fields{
+			"source_url": messageText,
+		})
 
 		if messageText == "" {
 			w.WriteHeader(http.StatusOK)
@@ -182,7 +171,7 @@ func main() {
 				},
 			})
 			if err != nil {
-				logger.Errorf("Cannot send message: %s", err)
+				logger.WithError(err).Error("Cannot send message")
 			}
 			w.WriteHeader(http.StatusOK)
 			return
@@ -194,7 +183,7 @@ func main() {
 			ReplyToMessageId: message.MessageId,
 		})
 		if err != nil {
-			logger.Errorw("Cannot send message", "error", err)
+			logger.WithError(err).Error("Cannot send message")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -206,7 +195,7 @@ func main() {
 				Text:      "❌ Only TikTok, Instagram, Twitter or Shorts links are accepted.",
 			})
 			if err != nil {
-				logger.Errorf("Cannot edit message: %s", err)
+				logger.WithError(err).Error("Cannot edit message")
 			}
 		}
 
@@ -217,7 +206,7 @@ func main() {
 				Text:      "❌ Cannot process video.",
 			})
 			if err != nil {
-				logger.Errorf("Cannor edit message: %s", err)
+				logger.WithError(err).Error("Cannot edit message")
 			}
 		}
 
@@ -227,13 +216,13 @@ func main() {
 				MessageId: *messageToEdit.MessageId,
 			})
 			if err != nil {
-				logger.Errorf("Cannot delete message: %s", err)
+				logger.WithError(err).Error("Cannot delete message")
 			}
 		}
 
 		parsedUrl, err := url.Parse(messageText)
 		if err != nil {
-			logger.Errorf("Cannot parse url: %s", err)
+			logger.WithError(err).Error("Cannot parse url")
 			SendBadUrlMessage()
 			w.WriteHeader(http.StatusOK)
 			return
@@ -241,7 +230,7 @@ func main() {
 
 		savedVideo, err := dbClient.GetVideo(messageText)
 		if err != nil {
-			logger.Errorf("Cannot get video from db: %s", err)
+			logger.WithError(err).Error("Cannot get video from db")
 		}
 		if savedVideo != nil {
 			_, err := tgClient.SendVideo(&telegram.SendVideo{
@@ -251,7 +240,7 @@ func main() {
 				Caption:          &messageText,
 			})
 			if err != nil {
-				logger.Errorf("Cannot send video: %s", err)
+				logger.WithError(err).Error("Cannot send video")
 				SendCannotProcessVideoMessage()
 				w.WriteHeader(http.StatusOK)
 				return
@@ -265,7 +254,7 @@ func main() {
 
 		parsedPlatform := platform.ParsePlatform(parsedUrl)
 		if parsedPlatform == platform.PlatformUnknown {
-			logger.Errorf("Cannot parse platform from url: %s", messageText)
+			logger.Error("Cannot parse platform")
 			SendBadUrlMessage()
 			w.WriteHeader(http.StatusOK)
 			return
@@ -280,22 +269,24 @@ func main() {
 		case platform.PlatformTwitter:
 			resolver = twitter.NewTwitterResolver(&httpClient)
 		default:
-			logger.Errorf("Unrechable code: %+v", parsedPlatform)
+			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		targetUrl, err := resolver.ResolveUrl(parsedUrl.String())
+		targetUrl, err := resolver.ResolveUrl(ctx, parsedUrl.String())
 		if err != nil {
-			logger.Errorw("Cannot resolve url", "error", err, "source_url", messageText)
+			logger.WithError(err).Error("Cannot resolve url")
 			SendCannotProcessVideoMessage()
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		res, err := mp4.Fetch(&httpClient, logger, *targetUrl)
+		logger = logger.WithField("target_url", *targetUrl)
+
+		res, err := mp4.Fetch(ctx, &httpClient, *targetUrl)
 		if err != nil {
-			logger.Errorw("Cannot parse target url", "error", err, "source_url", messageText, "target_url", *targetUrl)
+			logger.WithError(err).Error("Cannot parse target url")
 			SendCannotProcessVideoMessage()
 			w.WriteHeader(http.StatusOK)
 			return
@@ -311,7 +302,7 @@ func main() {
 			Height:           res.Resolution.Height,
 		})
 		if err != nil {
-			logger.Errorw("Cannot send video", "error", err, "source_url", messageText, "target_url", *targetUrl)
+			logger.WithError(err).Error("Cannot send video")
 			SendCannotProcessVideoMessage()
 			w.WriteHeader(http.StatusOK)
 			return
@@ -322,7 +313,7 @@ func main() {
 		if video != nil && video.Video != nil {
 			_, err = dbClient.InsertVideo(messageText, video.Video.FileId)
 			if err != nil {
-				logger.Errorw("Cannot insert video to db: %s", "error", err, "source_url", messageText, "file_id", video.Video.FileId)
+				logger.WithError(err).WithField("file_id", video.Video.FileId).Error("Cannot insert video to db")
 			}
 		}
 
@@ -331,6 +322,19 @@ func main() {
 
 	http.Handle("/metrics", promhttp.Handler())
 
-	logger.Infof("Starting server at %s", listenAddress)
-	logger.Fatal(http.ListenAndServe(listenAddress, nil))
+	// Graceful shutdown
+	go func() {
+		<-ctx.Done()
+
+		err = httpServer.Shutdown(context.Background())
+		if err != nil {
+			logger.WithError(err).Fatal("Cannot shutdown server")
+		}
+	}()
+
+	logger.WithField("address", config.ListenAddress).Info("Starting server")
+	err = httpServer.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		logger.WithError(err).Error("Failed to listen server")
+	}
 }

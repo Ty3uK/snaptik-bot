@@ -9,16 +9,16 @@ import (
 	"net/http"
 	"strconv"
 
-	"go.uber.org/zap"
+	"github.com/sirupsen/logrus"
 )
 
 type ChatType string
 
 const (
 	ChatTypePrivate    ChatType = "private"
-	ChatTypeGroup      ChatType = "private"
-	ChatTypeSupergroup ChatType = "private"
-	ChatTypeChannel    ChatType = "private"
+	ChatTypeGroup      ChatType = "group"
+	ChatTypeSupergroup ChatType = "supergroup"
+	ChatTypeChannel    ChatType = "channel"
 )
 
 type SetWebhook struct {
@@ -104,10 +104,10 @@ type Response[T any] struct {
 type TelegramClient struct {
 	apiPath    string
 	httpClient *http.Client
-	logger     *zap.SugaredLogger
+	logger     *logrus.Logger
 }
 
-func NewTelegramClient(botToken string, httpClient *http.Client, logger *zap.SugaredLogger) TelegramClient {
+func NewTelegramClient(botToken string, httpClient *http.Client, logger *logrus.Logger) TelegramClient {
 	return TelegramClient{
 		apiPath:    fmt.Sprintf("https://api.telegram.org/bot%s", botToken),
 		httpClient: httpClient,
@@ -152,20 +152,20 @@ func (client *TelegramClient) SendVideoFile(video *SendVideoFile) (*Message, err
 
 		file, err := form.CreateFormFile("video", "video.mp4")
 		if err != nil {
-			client.logger.Errorf("Cannot create file field: %s", err)
+			client.logger.WithError(err).Error("Cannot create file field")
 			return
 		}
 
 		_, err = file.Write(*video.VideoMeta)
 		if err != nil {
-			client.logger.Errorf("Cannot write video meta: %s", err)
+			client.logger.WithError(err).Error("Cannot write video meta")
 			return
 		}
 
 		_, err = io.Copy(file, *video.Video)
 		if err != nil {
+			client.logger.WithError(err).Error("Cannot write video")
 			w.CloseWithError(err)
-			client.logger.Errorf("Cannot write video: %s", err)
 			return
 		}
 	}()

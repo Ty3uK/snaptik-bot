@@ -9,7 +9,7 @@ import (
 
 func Decode(h string, _ int, n string, t uint64, e int, _ int) (string, error) {
 	var result strings.Builder
-	replaces := []string{}
+	var replaces []string
 
 	for i := 0; i < len(h); i++ {
 		s := ""
