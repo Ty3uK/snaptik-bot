@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const metaSize = 32*1024
+
 type FetchResponse struct {
 	Resolution *Resolution
 	Meta       *[]byte
@@ -41,11 +43,14 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
-	meta := make([]byte, 1024)
-	_, err = res.Body.Read(meta)
+	meta := make([]byte, metaSize)
+	n, err := io.ReadFull(res.Body, meta)
 	if err != nil {
 		defer res.Body.Close()
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
+	}
+	if n != metaSize {
+		return nil, fmt.Errorf("Read more bytes than expected: %d expected, got %d", metaSize, n)
 	}
 
 	contentType := res.Header.Get("Content-Type")
