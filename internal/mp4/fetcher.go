@@ -3,14 +3,14 @@ package mp4
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
-const metaSize = 32*1024
+const metaSize = 32 * 1024
 
 type FetchResponse struct {
 	Resolution *Resolution
@@ -32,24 +32,26 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		return nil, fmt.Errorf("Cannot make request: %s", err)
 	}
 
-	contentLengthStr := res.Header.Get("Content-Length")
-	contentLength, err := strconv.Atoi(contentLengthStr)
-	if err != nil {
-		return nil, fmt.Errorf("Cannot parse Content-Length: %s", err)
+	contentLength := res.ContentLength
+	if contentLength == 0 {
+		_ = res.Body.Close()
+		return nil, errors.New("Empty Content-Length")
 	}
 
 	contentLength = contentLength / 1024 / 1024
 	if contentLength >= 50 {
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
 	meta := make([]byte, metaSize)
 	n, err := io.ReadFull(res.Body, meta)
 	if err != nil {
-		defer res.Body.Close()
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
 	}
 	if n != metaSize {
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("Read more bytes than expected: %d expected, got %d", metaSize, n)
 	}
 
@@ -58,13 +60,13 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		contentType = http.DetectContentType(meta)
 	}
 	if contentType != "video/mp4" {
-		defer res.Body.Close()
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}
 
 	resolution, err := ParseResolution(bytes.NewReader(meta))
 	if err != nil || resolution == nil {
-		defer res.Body.Close()
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("Cannot parse resolution: %s", err)
 	}
 

@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "net/http/pprof"
+
 	"github.com/Ty3uK/snaptik-bot/internal/db"
 	"github.com/Ty3uK/snaptik-bot/internal/mp4"
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
