@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -12,8 +13,9 @@ type DbClient struct {
 }
 
 type Video struct {
-	Url    string `json:"url"`
-	FileId string `json:"file_id"`
+	Url       string    `json:"url"`
+	FileId    string    `json:"file_id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func NewDbClient(dbPath string) (*DbClient, error) {
@@ -50,13 +52,13 @@ func (client *DbClient) GetVideo(url string) (*Video, error) {
 }
 
 func (client *DbClient) InsertVideo(url string, fileId string) (bool, error) {
-	stmt, err := client.db.Prepare("INSERT INTO videos VALUES (?, ?)")
+	stmt, err := client.db.Prepare("INSERT INTO videos VALUES (?, ?, ?)")
 	if err != nil {
 		return false, fmt.Errorf("Cannot prepare db statement: %e", err)
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(url, fileId)
+	_, err = stmt.Exec(url, fileId, time.Now())
 	if err != nil {
 		return false, fmt.Errorf("Cannot exec db statement: %e", err)
 	}
