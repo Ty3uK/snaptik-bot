@@ -41,7 +41,7 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
-	meta := make([]byte, 16*1024)
+	meta := make([]byte, 1024)
 	_, err = res.Body.Read(meta)
 	if err != nil {
 		defer res.Body.Close()

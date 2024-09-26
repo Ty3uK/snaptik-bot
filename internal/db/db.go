@@ -24,7 +24,7 @@ func NewDbClient(dbPath string) (*DbClient, error) {
 		return nil, fmt.Errorf("Cannot open db: %e", err)
 	}
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS videos (url TEXT PRIMARY KEY, file_id TEXT NOT NULL)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS videos (url TEXT PRIMARY KEY, file_id TEXT NOT NULL, created_at DATETIME NOT NULL)")
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create table: %s", err)
 	}
