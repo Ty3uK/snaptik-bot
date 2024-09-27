@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,9 +20,11 @@ type FetchResponse struct {
 	Body       io.ReadCloser
 }
 
+var replacer = strings.NewReplacer(" ", "%20", "&amp;", "&")
+
 func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
 	// Workaround for partially encoded query params
-	sourceUrl = strings.ReplaceAll(sourceUrl, " ", "%20")
+	sourceUrl = replacer.Replace(sourceUrl)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", sourceUrl, nil)
 	if err != nil {
@@ -30,6 +34,12 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot make request: %s", err)
+	}
+
+	contentType := detectContentType(res)
+	if contentType != "" && contentType != "video/mp4" {
+		_ = res.Body.Close()
+		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}
 
 	contentLength := res.ContentLength
@@ -55,8 +65,7 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		return nil, fmt.Errorf("Read more bytes than expected: %d expected, got %d", metaSize, n)
 	}
 
-	contentType := res.Header.Get("Content-Type")
-	if contentType != "video/mp4" {
+	if contentType == "" {
 		contentType = http.DetectContentType(meta)
 	}
 	if contentType != "video/mp4" {
@@ -75,4 +84,26 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		Meta:       &meta,
 		Body:       res.Body,
 	}, nil
+}
+
+func detectContentType(res *http.Response) string {
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "" && contentType != "application/octet-stream" {
+		return contentType
+	}
+
+	contentDisposition := res.Header.Get("Content-Disposition")
+	if contentDisposition != "" {
+		_, params, _ := mime.ParseMediaType(contentDisposition)
+		filename := params["filename"]
+		if filename != "" {
+			ext := filepath.Ext(filename)
+			mtype := mime.TypeByExtension(ext)
+			if mtype != "" {
+				return mtype
+			}
+		}
+	}
+
+	return ""
 }
