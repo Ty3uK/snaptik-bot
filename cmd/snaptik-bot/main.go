@@ -196,7 +196,7 @@ func main() {
 			_, err := tgClient.EditMessageText(&telegram.EditMessageText{
 				ChatId:    chat.Id,
 				MessageId: *messageToEdit.MessageId,
-				Text:      "❌ Only TikTok, Instagram, Twitter or Shorts links are accepted.",
+				Text:      "❌ Only TikTok, Instagram, Twitter, Shorts or Facebook links are accepted.",
 			})
 			if err != nil {
 				logger.WithError(err).Error("Cannot edit message")
