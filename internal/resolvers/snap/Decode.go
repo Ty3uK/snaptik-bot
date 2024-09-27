@@ -1,7 +1,6 @@
 package snap
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -9,20 +8,24 @@ import (
 
 func Decode(h string, _ int, n string, t uint64, e int, _ int) (string, error) {
 	var result strings.Builder
-	var replaces []string
+	result.Grow(len(h))
 
+	replaces := make([]string, 0, len(n)*2)
+	for j := 0; j < len(n); j++ {
+		replaces = append(replaces, string(n[j]), strconv.Itoa(j))
+	}
+	replacer := strings.NewReplacer(replaces...)
+
+	var sb strings.Builder
 	for i := 0; i < len(h); i++ {
-		s := ""
+		sb.Reset()
+
 		for i < len(h) && h[i] != n[e] {
-			s += string(h[i])
+			sb.WriteByte(h[i])
 			i++
 		}
 
-		replaces = []string{}
-		for j := 0; j < len(n); j++ {
-			replaces = append(replaces, string(n[j]), fmt.Sprint(j))
-		}
-		s = strings.NewReplacer(replaces...).Replace(s)
+		s := replacer.Replace(sb.String())
 
 		if !unicode.IsDigit(rune(s[0])) {
 			result.WriteString(s)
