@@ -16,6 +16,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
 	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
+	"github.com/Ty3uK/snaptik-bot/internal/resolvers/facebook"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/shorts"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/twitter"
@@ -34,6 +35,7 @@ I'm a bot that can download video from:
 - Instagram
 - Youtube Shorts
 - Twitter (X)
+- Facebook
 
 Just send me a link and I'll send a video back to you 💪
 
@@ -270,6 +272,8 @@ func main() {
 			resolver = shorts.NewShortsResolver(&httpClient)
 		case platform.PlatformTwitter:
 			resolver = twitter.NewTwitterResolver(&httpClient)
+		case platform.PlatformFacebook:
+			resolver = facebook.NewFacebookResolver(&httpClient)
 		default:
 			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)
