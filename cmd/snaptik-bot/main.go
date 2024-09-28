@@ -16,7 +16,6 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
 	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
-	"github.com/Ty3uK/snaptik-bot/internal/resolvers/facebook"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/shorts"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/twitter"
@@ -266,14 +265,12 @@ func main() {
 
 		var resolver resolvers.Resolver
 		switch parsedPlatform {
-		case platform.PlatformTikTok, platform.PlatformInstagram:
+		case platform.PlatformTikTok, platform.PlatformInstagram, platform.PlatformFacebook:
 			resolver = snap.NewSnapResolver(&httpClient, parsedPlatform)
 		case platform.PlatformShorts:
 			resolver = shorts.NewShortsResolver(&httpClient)
 		case platform.PlatformTwitter:
 			resolver = twitter.NewTwitterResolver(&httpClient)
-		case platform.PlatformFacebook:
-			resolver = facebook.NewFacebookResolver(&httpClient)
 		default:
 			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)

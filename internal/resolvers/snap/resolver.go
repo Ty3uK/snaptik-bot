@@ -17,7 +17,7 @@ import (
 
 var TOKEN_REGEXP = regexp.MustCompile(`<input name="token" value="(.+?)" .+?>`)
 var DECODER_ARGS_REGEXP = regexp.MustCompile(`\("(.+?)",(\d+),"(.+?)",(\d+),(\d+),(\d+)\)`)
-var RESULT_VIDEO_URL_REGEXP = regexp.MustCompile(`href=\\?"(https://(.*?\.)?(snaptik\.app|snapinsta\.app|rapidcdn\.app)/.*?)\\?"`)
+var RESULT_VIDEO_URL_REGEXP = regexp.MustCompile(`href=\\?"(https://(.*?\.)?(snaptik\.app|snapinsta\.app|snapsave.app|rapidcdn\.app)/.*?)\\?"`)
 
 type SnapResolver struct {
 	httpClient *http.Client
@@ -40,9 +40,11 @@ func (resolver *SnapResolver) ResolveUrl(ctx context.Context, sourceUrl string) 
 	form := bytes.Buffer{}
 	writer := multipart.NewWriter(&form)
 	_ = writer.WriteField("url", sourceUrl)
-	_ = writer.WriteField("lang", "en")
-	_ = writer.WriteField("token", *token)
-	_ = writer.WriteField("action", "post")
+	if resolver.platform != platform.PlatformFacebook {
+		_ = writer.WriteField("lang", "en")
+		_ = writer.WriteField("token", *token)
+		_ = writer.WriteField("action", "post")
+	}
 	err = writer.Close()
 	if err != nil {
 		return nil, fmt.Errorf("Cannot close multipart.Writer: %e", err)
@@ -94,14 +96,19 @@ func (resolver *SnapResolver) ResolveUrl(ctx context.Context, sourceUrl string) 
 }
 
 func (r *SnapResolver) getToken(ctx context.Context) (*string, error) {
+	if r.platform == platform.PlatformFacebook {
+		return nil, nil
+	}
+
 	referer := r.getReferer()
+	host := r.getHost()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", referer, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %e", err)
 	}
 
-	req.Header.Set("Host", "snapinsta.app")
+	req.Header.Set("Host", host)
 	req.Header.Add("Accept", "*/*")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:129.0) Gecko/20100101 Firefox/129.0")
 
@@ -135,6 +142,8 @@ func (r *SnapResolver) getEndpoint() string {
 		return "https://snaptik.app/abc2.php"
 	case platform.PlatformInstagram:
 		return "https://snapinsta.app/action2.php"
+	case platform.PlatformFacebook:
+		return "https://snapsave.app/action.php?lang=en"
 	default:
 		return ""
 	}
@@ -146,6 +155,21 @@ func (r *SnapResolver) getReferer() string {
 		return "https://snaptik.app/"
 	case platform.PlatformInstagram:
 		return "https://snapinsta.app/"
+	case platform.PlatformFacebook:
+		return "https://snapsave.app/"
+	default:
+		return ""
+	}
+}
+
+func (r *SnapResolver) getHost() string {
+	switch r.platform {
+	case platform.PlatformTikTok:
+		return "snaptik.app"
+	case platform.PlatformInstagram:
+		return "snapinsta.app"
+	case platform.PlatformFacebook:
+		return "snapsave.app"
 	default:
 		return ""
 	}
