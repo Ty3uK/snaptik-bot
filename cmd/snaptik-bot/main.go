@@ -20,6 +20,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/shorts"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/twitter"
+	"github.com/Ty3uK/snaptik-bot/internal/resolvers/vidburner"
 	"github.com/Ty3uK/snaptik-bot/internal/telegram"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -36,6 +37,7 @@ I'm a bot that can download video from:
 - Youtube Shorts
 - Twitter (X)
 - Facebook
+- Snaptchat
 
 Just send me a link and I'll send a video back to you 💪
 
@@ -274,6 +276,8 @@ func main() {
 			resolver = shorts.NewShortsResolver(&httpClient)
 		case platform.PlatformTwitter:
 			resolver = twitter.NewTwitterResolver(&httpClient)
+		case platform.PlatformSnapchat:
+			resolver = vidburner.NewVidBurnerResolver(&httpClient)
 		default:
 			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)

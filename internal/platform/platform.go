@@ -14,6 +14,7 @@ const (
 	PlatformShorts
 	PlatformTwitter
 	PlatformFacebook
+	PlatformSnapchat
 )
 
 func ParsePlatform(sourceUrl *url.URL) Platform {
@@ -27,6 +28,8 @@ func ParsePlatform(sourceUrl *url.URL) Platform {
 		return PlatformTwitter
 	} else if strings.HasSuffix(sourceUrl.Host, "facebook.com") {
 		return PlatformFacebook
+	} else if strings.HasSuffix(sourceUrl.Host, "snapchat.com") {
+		return PlatformSnapchat
 	}
 	return PlatformUnknown
 }
