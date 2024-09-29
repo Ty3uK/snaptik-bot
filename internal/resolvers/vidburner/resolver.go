@@ -51,7 +51,7 @@ func (r *VidBurnerResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Referer", "https://vidburner.com/snapchat-video-downloader/")
+	req.Header.Add("Referer", "https://vidburner.com/")
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0")
 
 	res, err := r.httpClient.Do(req)
@@ -78,10 +78,12 @@ func (r *VidBurnerResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*
 }
 
 func (r *VidBurnerResolver) getToken(ctx context.Context) (*string, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://vidburner.com/snapchat-video-downloader/", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://vidburner.com/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %s", err)
 	}
+
+	req.Header.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0")
 
 	res, err := r.httpClient.Do(req)
 	if err != nil {
