@@ -12,6 +12,7 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/Ty3uK/snaptik-bot/internal/db"
+	"github.com/Ty3uK/snaptik-bot/internal/metrics"
 	"github.com/Ty3uK/snaptik-bot/internal/mp4"
 	"github.com/Ty3uK/snaptik-bot/internal/platform"
 	"github.com/Ty3uK/snaptik-bot/internal/random"
@@ -107,6 +108,8 @@ func main() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+
+		metrics.HttpRequestsTotal.Inc()
 
 		if secretToken != nil && r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != *secretToken {
 			log.Error("Cannot validate X-Telegram-Bot-Api-Secret-Token")
