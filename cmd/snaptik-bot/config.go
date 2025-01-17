@@ -24,12 +24,12 @@ func parseConfig() (*Config, error) {
 	}
 
 	dbPath := os.Getenv("DB_PATH")
-	if botToken == "" {
+	if dbPath == "" {
 		dbPath = "./db.sqlite3"
 	}
 
 	listenAddress := os.Getenv("LISTEN_ADDRESS")
-	if botToken == "" {
+	if listenAddress == "" {
 		listenAddress = ":8080"
 	}
 
