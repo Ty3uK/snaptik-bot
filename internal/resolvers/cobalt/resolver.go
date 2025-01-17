@@ -62,6 +62,9 @@ func (r *CobaltResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*str
 	if result.Error != nil {
 		return nil, fmt.Errorf("Bad response from service: %s", *result.Error)
 	}
+	if result.Status != "redirect" && result.Status != "tunnel" {
+		return nil, fmt.Errorf("Unsupported status: %s", result.Status)
+	}
 
 	return result.Url, nil
 }
