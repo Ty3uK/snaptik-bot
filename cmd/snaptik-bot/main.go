@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "net/http/pprof"
 
@@ -71,7 +72,11 @@ func main() {
 	}()
 
 	httpClient := http.Client{
+		Timeout: time.Second * 30,
 		Transport: &http.Transport{
+			MaxIdleConns: 300,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout: time.Second * 30,
 			TLSClientConfig: &tls.Config{
 				CurvePreferences: []tls.CurveID{tls.CurveP256, tls.CurveP384, tls.CurveP521, tls.X25519},
 			},
