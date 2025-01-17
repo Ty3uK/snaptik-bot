@@ -37,7 +37,7 @@ func (r *CobaltResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*str
 		return nil, fmt.Errorf("Cannot encode request body: %s", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://127.0.0.1:9000", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://cobalt:9000", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %s", err)
 	}
