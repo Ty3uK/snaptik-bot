@@ -17,7 +17,7 @@ type CobaltResolver struct {
 type CobaltRequest struct {
 	Url          string `json:"url"`
 	VideoQuality string `json:"videoQuality"`
-	TiktokH265   bool   `json:"tiktokH265"`
+	AllowH265    bool   `json:"allowH265"`
 }
 
 type CobaltResponse struct {
@@ -37,7 +37,7 @@ func (r *CobaltResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*str
 	body, err := json.Marshal(CobaltRequest{
 		Url:          sourceUrl,
 		VideoQuality: "max",
-		TiktokH265:   true,
+		AllowH265:    true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("Cannot encode request body: %s", err)

@@ -41,8 +41,6 @@ Just send me a link and I'll send a video back to you 💪
 
 
 Source code: https://github.com/Ty3uK/snaptik-bot
-
-Creator: @xxxTy3uKxxx
 `
 
 func main() {
