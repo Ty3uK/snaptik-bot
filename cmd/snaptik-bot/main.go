@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"net/http/cookiejar"
 	_ "net/http/pprof"
 
 	"github.com/Ty3uK/snaptik-bot/internal/db"
@@ -19,7 +20,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/cobalt"
-	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
+	"github.com/Ty3uK/snaptik-bot/internal/resolvers/tiktok"
 	"github.com/Ty3uK/snaptik-bot/internal/telegram"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -70,6 +71,10 @@ func main() {
 		dbClient.Close()
 	}()
 
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		logger.WithError(err).Fatal("Cannot create cookie jar")
+	}
 	httpClient := http.Client{
 		Timeout: time.Second * 30,
 		Transport: &http.Transport{
@@ -80,6 +85,7 @@ func main() {
 				CurvePreferences: []tls.CurveID{tls.CurveP256, tls.CurveP384, tls.CurveP521, tls.X25519},
 			},
 		},
+		Jar: jar,
 	}
 
 	logger.Info("Generating secret token.")
@@ -277,7 +283,7 @@ func main() {
 			platform.PlatformSnapchat:
 			resolver = cobalt.NewCobaltResolver(&httpClient)
 		case platform.PlatformTikTok:
-			resolver = snap.NewSnapResolver(&httpClient, platform.PlatformTikTok)
+			resolver = tiktok.NewTikTokResolver(&httpClient)
 		default:
 			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)
@@ -294,7 +300,7 @@ func main() {
 
 		logger = logger.WithField("target_url", *targetUrl)
 
-		res, err := mp4.Fetch(ctx, &httpClient, *targetUrl)
+		res, err := mp4.Fetch(ctx, &httpClient, *targetUrl, parsedPlatform)
 		if err != nil {
 			logger.WithError(err).Error("Cannot parse target url")
 			SendCannotProcessVideoMessage()

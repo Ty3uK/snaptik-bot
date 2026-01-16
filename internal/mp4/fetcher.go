@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"github.com/Ty3uK/snaptik-bot/internal/platform"
 )
 
-const metaSize = 32 * 1024
+const maxMetaSize = 32 * 1024
 
 type FetchResponse struct {
 	Resolution *Resolution
@@ -22,13 +24,18 @@ type FetchResponse struct {
 
 var replacer = strings.NewReplacer(" ", "%20", "&amp;", "&")
 
-func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*FetchResponse, error) {
+func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string, targetPlatform platform.Platform) (*FetchResponse, error) {
 	// Workaround for partially encoded query params
 	sourceUrl = replacer.Replace(sourceUrl)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", sourceUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create request: %s", err)
+	}
+	switch targetPlatform {
+	case platform.PlatformTikTok:
+		req.Header.Add("Origin", "https://www.tiktok.com")
+		req.Header.Add("Referer", "https://www.tiktok.com")
 	}
 
 	res, err := httpClient.Do(req)
@@ -37,7 +44,7 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 	}
 
 	contentType := detectContentType(res)
-	if contentType != "" && contentType != "video/mp4" {
+	if contentType != "" && contentType != "video/mp4" && contentType != "application/octet-stream" {
 		_ = res.Body.Close()
 		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}
@@ -48,19 +55,20 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 		return nil, errors.New("Empty Content-Length")
 	}
 
-	contentLength = contentLength / 1024 / 1024
-	if contentLength >= 50 {
+	if contentLength >= 50*1024*1024 {
 		_ = res.Body.Close()
 		return nil, fmt.Errorf("Video is larger than 50MB")
 	}
 
+	metaSize := min(maxMetaSize, contentLength)
 	meta := make([]byte, metaSize)
 	n, err := io.ReadFull(res.Body, meta)
 	if err != nil {
+		fmt.Printf("%+v\n", res)
 		_ = res.Body.Close()
 		return nil, fmt.Errorf("Cannot read meta from body: %s", err)
 	}
-	if n != metaSize {
+	if int64(n) != metaSize {
 		_ = res.Body.Close()
 		return nil, fmt.Errorf("Read more bytes than expected: %d expected, got %d", metaSize, n)
 	}
@@ -68,7 +76,7 @@ func Fetch(ctx context.Context, httpClient *http.Client, sourceUrl string) (*Fet
 	if contentType == "" {
 		contentType = http.DetectContentType(meta)
 	}
-	if contentType != "video/mp4" {
+	if contentType != "video/mp4" && contentType != "application/octet-stream" {
 		_ = res.Body.Close()
 		return nil, fmt.Errorf("Bad content type: %s", contentType)
 	}

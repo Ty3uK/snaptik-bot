@@ -1,6 +1,6 @@
 module github.com/Ty3uK/snaptik-bot
 
-go 1.23.1
+go 1.24
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.23
@@ -16,6 +16,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
