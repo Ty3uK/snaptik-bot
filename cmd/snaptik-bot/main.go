@@ -19,6 +19,7 @@ import (
 	"github.com/Ty3uK/snaptik-bot/internal/random"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers/cobalt"
+	"github.com/Ty3uK/snaptik-bot/internal/resolvers/snap"
 	"github.com/Ty3uK/snaptik-bot/internal/telegram"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -72,9 +73,9 @@ func main() {
 	httpClient := http.Client{
 		Timeout: time.Second * 30,
 		Transport: &http.Transport{
-			MaxIdleConns: 300,
+			MaxIdleConns:        300,
 			MaxIdleConnsPerHost: 100,
-			IdleConnTimeout: time.Second * 30,
+			IdleConnTimeout:     time.Second * 30,
 			TLSClientConfig: &tls.Config{
 				CurvePreferences: []tls.CurveID{tls.CurveP256, tls.CurveP384, tls.CurveP521, tls.X25519},
 			},
@@ -89,7 +90,7 @@ func main() {
 
 	tgClient := telegram.NewTelegramClient(config.BotToken, &httpClient, logger)
 
-	logger.Info("Settings webhook.")
+	logger.WithFields(log.Fields{"url": config.WebhookUrl}).Info("Setting webhook")
 	res, err := tgClient.SetWebook(&telegram.SetWebhook{
 		Url:         config.WebhookUrl,
 		SecretToken: secretToken,
@@ -270,11 +271,13 @@ func main() {
 
 		var resolver resolvers.Resolver
 		switch parsedPlatform {
-		case platform.PlatformTikTok, platform.PlatformInstagram, platform.PlatformFacebook,
+		case platform.PlatformInstagram, platform.PlatformFacebook,
 			platform.PlatformShorts,
 			platform.PlatformTwitter,
 			platform.PlatformSnapchat:
 			resolver = cobalt.NewCobaltResolver(&httpClient)
+		case platform.PlatformTikTok:
+			resolver = snap.NewSnapResolver(&httpClient, platform.PlatformTikTok)
 		default:
 			logger.WithField("platform", parsedPlatform).Error("Unrechable code")
 			w.WriteHeader(http.StatusOK)
