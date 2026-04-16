@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
@@ -62,7 +62,7 @@ impl Resolver for InstagramResolver {
                 .max_by_key(|v| v.bandwidth)
                 .context("Instagram:resolve: cannot find video")?;
             return Ok(ResolverResult {
-                url: video.url.to_string(),
+                url: video.url.clone(),
                 width: video.width,
                 height: video.height,
                 referer: None,
@@ -73,24 +73,21 @@ impl Resolver for InstagramResolver {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InstagramResponse<'a> {
-    #[serde(borrow)]
-    pub items: Option<Vec<InstagramItem<'a>>>,
+struct InstagramResponse {
+    pub items: Option<Vec<InstagramItem>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InstagramItem<'a> {
-    #[serde(borrow)]
-    pub video_versions: Vec<InstagramVideoVersion<'a>>,
+struct InstagramItem {
+    pub video_versions: Vec<InstagramVideoVersion>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InstagramVideoVersion<'a> {
+struct InstagramVideoVersion {
     pub bandwidth: u32,
     pub width: u32,
     pub height: u32,
-    #[serde(borrow)]
-    pub url: Cow<'a, str>,
+    pub url: String,
 }
 
 const INVALID: u8 = 0xFF;

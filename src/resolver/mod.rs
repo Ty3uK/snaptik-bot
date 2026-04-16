@@ -2,9 +2,9 @@ use anyhow::Result;
 use reqwest::Url;
 use serde::Serialize;
 
+pub mod instagram;
 pub mod tiktok;
 pub mod twitter;
-pub mod instagram;
 
 #[derive(Debug, Serialize)]
 pub struct ResolverResult {
