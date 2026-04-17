@@ -1,4 +1,6 @@
 use anyhow::anyhow;
+use bytes::Bytes;
+use futures::Stream;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -10,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct Telegram {
     client: Arc<Client>,
-    secret: String,
+    pub secret: String,
     endpoint: String,
 }
 
@@ -67,32 +69,70 @@ impl Telegram {
         }
     }
 
-    pub async fn send_video(
-        &self,
-        chat_id: i64,
-        video: Body,
-        width: usize,
-        height: usize,
-    ) -> Result<Message> {
-        let form = Form::new()
-            .text("chat_id", chat_id.to_string())
-            .text("width", width.to_string())
-            .text("height", height.to_string())
-            .part("video", Part::stream(video));
+    pub async fn send_video(&self, req: SendVideo) -> Result<()> {
+        let mut form = Form::new()
+            .text("chat_id", req.chat_id.to_string())
+            .text("width", req.width.to_string())
+            .text("height", req.height.to_string())
+            .text("caption", req.caption)
+            .text(
+                "reply_parameters",
+                serde_json::to_string(&req.reply_parameters)
+                    .context("Telegram:send_video: cannot stringify json")?,
+            );
+        match req.video {
+            Video::FileId(file_id) => form = form.text("file_id", file_id),
+            Video::Stream((stream, size)) => {
+                let stream = Body::wrap_stream(stream);
+                let part = if let Some(size) = size {
+                    Part::stream_with_length(stream, size)
+                } else {
+                    Part::stream(stream)
+                };
+                form = form.part(
+                    "video",
+                    part.file_name("video.mp4")
+                        .mime_str("video/mp4")
+                        .context("Telegram:send_video: cannot set mime")?,
+                );
+            }
+        };
         let body = self
             .client
-            .post(format!("{}/sendVideo", self.endpoint))
+            .post("http://localhost:4000")
+            // .post(format!("{}/sendVideo", self.endpoint))
             .multipart(form)
             .send()
             .await
-            .context("Telegram:set_webhook: cannot make request")?
+            .context("Telegram:send_video: cannot make request")?
             .bytes()
             .await
-            .context("Telegram:set_webhook: cannot read body")?;
+            .context("Telegram:send_video: cannot read body")?;
         let res: TelegramResponse<Message> =
-            serde_json::from_slice(&body).context("Telegram:set_webhook: cannot parse json")?;
+            serde_json::from_slice(&body).context("Telegram:send_video: cannot parse json")?;
         match res {
-            TelegramResponse::Ok { result, .. } => return Ok(result),
+            TelegramResponse::Ok { .. } => return Ok(()),
+            TelegramResponse::Err { description, .. } => {
+                return Err(anyhow!("Telegram:send_video: {}", description));
+            }
+        }
+    }
+
+    pub async fn send_message(&self, req: SendMessage) -> Result<()> {
+        let body = self
+            .client
+            .post(format!("{}/sendMessage", self.endpoint))
+            .json(&req)
+            .send()
+            .await
+            .context("Telegram:send_message: cannot make request")?
+            .bytes()
+            .await
+            .context("Telegram:send_message: cannot read body")?;
+        let res: TelegramResponse<Message> =
+            serde_json::from_slice(&body).context("Telegram:send_message: cannot parse json")?;
+        match res {
+            TelegramResponse::Ok { .. } => return Ok(()),
             TelegramResponse::Err { description, .. } => {
                 return Err(anyhow!("Telegram:send_video: {}", description));
             }
@@ -115,49 +155,63 @@ pub enum TelegramResponse<T> {
     },
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TelegramUpdate {
-    pub update_id: i64,
     pub message: Message,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Message {
     pub message_id: i64,
-    pub from: From,
     pub chat: Chat,
-    pub date: i64,
-    pub text: String,
+    pub text: Option<String>,
     pub entities: Option<Vec<Entity>>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct From {
-    pub id: i64,
-    pub is_bot: bool,
-    pub first_name: String,
-    pub last_name: String,
-    pub username: String,
-    pub language_code: String,
-    pub is_premium: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Chat {
     pub id: i64,
-    pub first_name: String,
-    pub last_name: String,
-    pub username: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Entity {
     pub offset: usize,
     pub length: usize,
     #[serde(rename = "type")]
     pub type_field: String,
+}
+
+pub struct SendVideo {
+    pub chat_id: i64,
+    pub video: Video,
+    pub width: u32,
+    pub height: u32,
+    pub caption: String,
+    pub reply_parameters: ReplyParameters,
+}
+
+pub enum Video {
+    Stream(
+        (
+            Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static>,
+            Option<u64>,
+        ),
+    ),
+    FileId(String),
+}
+
+#[derive(Debug, Serialize)]
+pub struct SendMessage {
+    pub chat_id: i64,
+    pub text: String,
+    pub reply_parameters: ReplyParameters,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReplyParameters {
+    pub message_id: i64,
+    pub chat_id: i64,
+    pub quote: String,
 }
 
 pub fn parse_entities<'a>(text: &'a str, entities: &'a [Entity]) -> Vec<(&'a str, &'a Entity)> {

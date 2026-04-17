@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
@@ -18,16 +18,14 @@ impl InstagramResolver {
 
 impl Resolver for InstagramResolver {
     async fn resolve(&self, source_url: &reqwest::Url) -> Result<super::ResolverResult> {
-        let kind = source_url
+        let mut segments = source_url
             .path_segments()
             .context("Instagram:resolve: cannot get path segments")?
-            .filter(|v| !v.is_empty())
+            .filter(|v| !v.is_empty());
+        let kind = segments
             .next()
             .context("Instagram:resolve: cannot get kind")?;
-        let id = source_url
-            .path_segments()
-            .context("Instagram:resolve: cannot get path segments")?
-            .filter(|v| !v.is_empty())
+        let id = segments
             .last()
             .context("Instagram:resolve: cannot get id")?;
         let id = if kind != "stories" {
@@ -62,10 +60,10 @@ impl Resolver for InstagramResolver {
                 .max_by_key(|v| v.bandwidth)
                 .context("Instagram:resolve: cannot find video")?;
             return Ok(ResolverResult {
-                url: video.url.clone(),
+                url: video.url.to_string(),
                 width: video.width,
                 height: video.height,
-                referer: None,
+                referer: "https://www.instagram.com".to_string(),
             });
         }
         return Err(anyhow!("Instagram:resolve: cannot find video"));
@@ -73,21 +71,24 @@ impl Resolver for InstagramResolver {
 }
 
 #[derive(Debug, Deserialize)]
-struct InstagramResponse {
-    pub items: Option<Vec<InstagramItem>>,
+struct InstagramResponse<'a> {
+    #[serde(borrow)]
+    pub items: Option<Vec<InstagramItem<'a>>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct InstagramItem {
-    pub video_versions: Vec<InstagramVideoVersion>,
+struct InstagramItem<'a> {
+    #[serde(borrow)]
+    pub video_versions: Vec<InstagramVideoVersion<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct InstagramVideoVersion {
+struct InstagramVideoVersion<'a> {
     pub bandwidth: u32,
     pub width: u32,
     pub height: u32,
-    pub url: String,
+    #[serde(borrow)]
+    pub url: Cow<'a, str>,
 }
 
 const INVALID: u8 = 0xFF;

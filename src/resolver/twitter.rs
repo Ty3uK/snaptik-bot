@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::{
@@ -139,10 +139,10 @@ impl Resolver for TwitterResolver {
             .map(|v| v.url.clone())
             .context("Twitter:resolve: cannot find url")?;
         return Ok(ResolverResult {
-            url,
+            url: url.to_string(),
             width: media.original_info.width,
             height: media.original_info.height,
-            referer: Some("https://x.com".to_string()),
+            referer: "https://x.com".to_string(),
         });
     }
 }
@@ -153,40 +153,47 @@ struct TwitterGuestTokenResponse {
 }
 
 #[derive(Deserialize)]
-struct TwitterResponse {
-    data: TwitterData,
+struct TwitterResponse<'a> {
+    #[serde(borrow)]
+    data: TwitterData<'a>,
 }
 
 #[derive(Deserialize)]
-struct TwitterData {
+struct TwitterData<'a> {
     #[serde(rename = "tweetResult")]
-    tweet_result: TwitterTweetResult,
+    #[serde(borrow)]
+    tweet_result: TwitterTweetResult<'a>,
 }
 
 #[derive(Deserialize)]
-struct TwitterTweetResult {
-    result: TwitterResult,
+struct TwitterTweetResult<'a> {
+    #[serde(borrow)]
+    result: TwitterResult<'a>,
 }
 
 #[derive(Deserialize)]
-struct TwitterResult {
-    legacy: TwitterLegacy,
+struct TwitterResult<'a> {
+    #[serde(borrow)]
+    legacy: TwitterLegacy<'a>,
 }
 
 #[derive(Deserialize)]
-struct TwitterLegacy {
-    entities: TwitterEntities,
+struct TwitterLegacy<'a> {
+    #[serde(borrow)]
+    entities: TwitterEntities<'a>,
 }
 
 #[derive(Deserialize)]
-struct TwitterEntities {
-    media: Vec<TwitterMedia>,
+struct TwitterEntities<'a> {
+    #[serde(borrow)]
+    media: Vec<TwitterMedia<'a>>,
 }
 
 #[derive(Deserialize)]
-struct TwitterMedia {
+struct TwitterMedia<'a> {
     original_info: TwitterOriginalInfo,
-    video_info: TwitterVideoInfo,
+    #[serde(borrow)]
+    video_info: TwitterVideoInfo<'a>,
 }
 
 #[derive(Deserialize)]
@@ -196,13 +203,16 @@ struct TwitterOriginalInfo {
 }
 
 #[derive(Deserialize)]
-struct TwitterVideoInfo {
-    variants: Vec<TwitterVariant>,
+struct TwitterVideoInfo<'a> {
+    #[serde(borrow)]
+    variants: Vec<TwitterVariant<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TwitterVariant {
-    content_type: String,
+struct TwitterVariant<'a> {
+    #[serde(borrow)]
+    content_type: Cow<'a, str>,
     bitrate: Option<u64>,
-    url: String,
+    #[serde(borrow)]
+    url: Cow<'a, str>,
 }

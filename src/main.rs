@@ -1,6 +1,7 @@
-use anyhow::anyhow;
-use futures::TryFutureExt;
-use futures::future::join_all;
+use axum::http::HeaderMap;
+use futures::StreamExt;
+use futures::stream;
+use itertools::Itertools;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -10,10 +11,11 @@ use axum::{Router, extract::State, routing::post};
 use rand::distr::{Alphanumeric, SampleString};
 use reqwest::{Client, Url};
 use tokio::fs;
-use tracing::info;
+use tracing::error;
 use tracing_subscriber::{EnvFilter, prelude::*};
 
-use crate::telegram::{Telegram, TelegramUpdate, parse_entities};
+use crate::telegram::SendVideo;
+use crate::telegram::{ReplyParameters, SendMessage, Telegram, TelegramUpdate, parse_entities};
 use crate::{
     config::Config,
     resolver::{
@@ -82,7 +84,7 @@ async fn run() -> Result<()> {
         .route("/", post(webhook_handler))
         .with_state(Arc::new(ServerState {
             client,
-            telegram: Arc::new(telegram),
+            telegram,
             tiktok_resolver,
             twitter_resolver,
             instagram_resolver,
@@ -94,65 +96,95 @@ async fn run() -> Result<()> {
 }
 
 async fn webhook_handler(
+    headers: HeaderMap,
     State(state): State<ServerStateType>,
     Json(body): Json<TelegramUpdate>,
 ) -> StatusCode {
-    let tiktok_resolver = Arc::new(&state.tiktok_resolver);
-    let twitter_resolver = Arc::new(&state.twitter_resolver);
-    let instagram_resolver = Arc::new(&state.instagram_resolver);
-    let res = body
+    let secret = headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if secret.is_none() || secret.unwrap().as_bytes() != state.telegram.secret.as_bytes() {
+        return StatusCode::OK;
+    }
+
+    let chat_id = body.message.chat.id;
+    let message_id = body.message.message_id;
+
+    let text = match body.message.text {
+        Some(v) => v,
+        None => return StatusCode::OK,
+    };
+
+    let urls: Vec<Url> = body
         .message
         .entities
         .iter()
-        .flat_map(|v| parse_entities(&body.message.text, v))
+        .flat_map(|v| parse_entities(&text, v))
         .filter(|(_, entity)| entity.type_field == "url")
         .filter_map(|(url, _)| Url::parse(url).ok())
-        .map(|v| {
-            let tiktok_resolver = tiktok_resolver.clone();
-            let twitter_resolver = twitter_resolver.clone();
-            let instagram_resolver = instagram_resolver.clone();
+        .unique_by(|v| v.path().to_string())
+        .collect();
+
+    stream::iter(urls)
+        .map(|url| {
+            let state = state.clone();
             return async move {
-                if let Some(d) = v.domain() {
-                    if d.ends_with("tiktok.com") {
-                        return tiktok_resolver.resolve(&v).await;
-                    }
-                    if d.ends_with("twitter.com") || d.ends_with("x.com") {
-                        return twitter_resolver.resolve(&v).await;
-                    }
-                    if d.ends_with("instagram.com") {
-                        return instagram_resolver.resolve(&v).await;
-                    }
-                    return Err(anyhow!("App:webhook_url: unknown URL"));
+                let result = async {
+                    let result = match url.domain() {
+                        Some(d) if d.ends_with("tiktok.com") => {
+                            state.tiktok_resolver.resolve(&url).await?
+                        }
+                        Some(d) if d.ends_with("twitter.com") || d.ends_with("x.com") => {
+                            state.twitter_resolver.resolve(&url).await?
+                        }
+                        Some(d) if d.ends_with("instagram.com") => {
+                            state.instagram_resolver.resolve(&url).await?
+                        }
+                        _ => anyhow::bail!("unsupported domain"),
+                    };
+                    let video = state
+                        .client
+                        .get(result.url)
+                        .header("Referer", result.referer)
+                        .send()
+                        .await?;
+                    let size = video.content_length();
+                    state
+                        .telegram
+                        .send_video(SendVideo {
+                            chat_id,
+                            video: telegram::Video::Stream((Box::new(video.bytes_stream()), size)),
+                            width: result.width,
+                            height: result.height,
+                            caption: url.to_string(),
+                            reply_parameters: ReplyParameters {
+                                message_id,
+                                chat_id,
+                                quote: url.to_string(),
+                            },
+                        })
+                        .await?;
+                    return Ok(());
                 }
-                return Err(anyhow!("App:webhook_url: unknown URL"));
+                .await;
+                if let Err(err) = result {
+                    error!("App:webhook_handler: {err}");
+                    _ = state
+                        .telegram
+                        .send_message(SendMessage {
+                            chat_id,
+                            text: "❌ Cannot process video.".to_string(),
+                            reply_parameters: ReplyParameters {
+                                message_id,
+                                chat_id,
+                                quote: url.to_string(),
+                            },
+                        })
+                        .await;
+                }
             };
         })
-        .map(|f| {
-            f.and_then(|v| {
-                let client = state.client.clone();
-                let telegram = state.telegram.clone();
-                return async move {
-                    let res = client
-                        .get(&v.url)
-                        .header("Referer", v.referer.unwrap_or_default())
-                        .send()
-                        .await
-                        .context("App:wehbook_url: cannot make request")?;
-                    return telegram
-                        .send_video(
-                            body.message.chat.id,
-                            res.into(),
-                            v.width as usize,
-                            v.height as usize,
-                        )
-                        .await;
-                };
-            })
-        });
-    let res = join_all(res).await;
-    for res in res {
-        info!("{res:?}");
-    }
+        .buffer_unordered(5)
+        .for_each(|_| async {})
+        .await;
     return StatusCode::OK;
 }
 
@@ -160,7 +192,7 @@ type ServerStateType = Arc<ServerState>;
 
 struct ServerState {
     client: Arc<Client>,
-    telegram: Arc<Telegram>,
+    telegram: Telegram,
     tiktok_resolver: TikTokResolver,
     twitter_resolver: TwitterResolver,
     instagram_resolver: InstagramResolver,

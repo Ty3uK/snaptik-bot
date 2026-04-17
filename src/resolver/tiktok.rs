@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use anyhow::{Ok, anyhow};
@@ -62,10 +63,10 @@ impl Resolver for TikTokResolver {
                 .max_by_key(|v| v.bitrate)
                 .context("TikTok:resolve: cannot find video")?;
             return Ok(ResolverResult {
-                url: String::from(item.play_addr.url_list[0].clone()),
+                url: item.play_addr.url_list[0].to_string(),
                 width: video.width,
                 height: video.height,
-                referer: Some(String::from("https://www.tiktok.com/")),
+                referer: "https://www.tiktok.com/".to_string(),
             });
         }
         return Err(anyhow!("TikTok:resolve: cannot find video"));
@@ -73,54 +74,63 @@ impl Resolver for TikTokResolver {
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokResponse {
+struct TikTokResponse<'a> {
     #[serde(rename = "__DEFAULT_SCOPE__")]
-    pub default_scope: TikTokDefaultScope,
+    #[serde(borrow)]
+    pub default_scope: TikTokDefaultScope<'a>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokDefaultScope {
+struct TikTokDefaultScope<'a> {
     #[serde(rename = "webapp.video-detail")]
-    pub webapp_video_detail: TikTokWebappVideoDetail,
+    #[serde(borrow)]
+    pub webapp_video_detail: TikTokWebappVideoDetail<'a>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokWebappVideoDetail {
+struct TikTokWebappVideoDetail<'a> {
     #[serde(rename = "itemInfo")]
-    pub item_info: TikTokItemInfo,
+    #[serde(borrow)]
+    pub item_info: TikTokItemInfo<'a>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokItemInfo {
+struct TikTokItemInfo<'a> {
     #[serde(rename = "itemStruct")]
-    pub item_struct: TikTokItemStruct,
+    #[serde(borrow)]
+    pub item_struct: TikTokItemStruct<'a>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokItemStruct {
-    pub video: Option<TikTokVideo>,
+struct TikTokItemStruct<'a> {
+    #[serde(borrow)]
+    pub video: Option<TikTokVideo<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokVideo {
+struct TikTokVideo<'a> {
     pub height: u32,
     pub width: u32,
     #[serde(rename = "bitrateInfo")]
-    pub bitrate_info: Vec<TikTokBitrateInfo>,
+    #[serde(borrow)]
+    pub bitrate_info: Vec<TikTokBitrateInfo<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokBitrateInfo {
+struct TikTokBitrateInfo<'a> {
     #[serde(rename = "CodecType")]
-    pub codec_type: String,
+    #[serde(borrow)]
+    pub codec_type: Cow<'a, str>,
     #[serde(rename = "Bitrate")]
     pub bitrate: i64,
     #[serde(rename = "PlayAddr")]
-    pub play_addr: TikTokPlayAddr,
+    #[serde(borrow)]
+    pub play_addr: TikTokPlayAddr<'a>,
 }
 
 #[derive(Debug, Deserialize)]
-struct TikTokPlayAddr {
+struct TikTokPlayAddr<'a> {
     #[serde(rename = "UrlList")]
-    pub url_list: Vec<String>,
+    #[serde(borrow)]
+    pub url_list: Vec<Cow<'a, str>>,
 }

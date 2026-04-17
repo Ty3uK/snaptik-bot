@@ -11,7 +11,7 @@ pub struct ResolverResult {
     pub url: String,
     pub width: u32,
     pub height: u32,
-    pub referer: Option<String>,
+    pub referer: String,
 }
 
 pub trait Resolver {
