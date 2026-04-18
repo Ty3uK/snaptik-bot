@@ -14,6 +14,7 @@ use tokio::fs;
 use tracing::error;
 use tracing_subscriber::{EnvFilter, prelude::*};
 
+use crate::db::Db;
 use crate::telegram::SendVideo;
 use crate::telegram::{ReplyParameters, SendMessage, Telegram, TelegramUpdate, parse_entities};
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
 };
 
 mod config;
+mod db;
 mod resolver;
 mod telegram;
 
@@ -48,6 +50,10 @@ async fn main() -> Result<()> {
 async fn run() -> Result<()> {
     let config = fs::read("config.toml").await.unwrap_or_default();
     let config: Config = toml::from_slice(&config).context("run: cannot parse config")?;
+
+    let db = Db::new(config.sqlite.path)
+        .await
+        .context("App:run: cannot open database")?;
 
     let mut store = reqwest_cookie_store::CookieStore::new();
     store
@@ -84,6 +90,7 @@ async fn run() -> Result<()> {
         .route("/", post(webhook_handler))
         .with_state(Arc::new(ServerState {
             client,
+            db,
             telegram,
             tiktok_resolver,
             twitter_resolver,
@@ -127,6 +134,35 @@ async fn webhook_handler(
         .map(|url| {
             let state = state.clone();
             return async move {
+                match state.db.get_video(url.as_str()).await {
+                    Ok(Some(file_id)) => {
+                        let res = state.telegram.send_video(SendVideo {
+                            chat_id,
+                            video: telegram::SendVideoVideo::FileId(file_id),
+                            width: None,
+                            height: None,
+                            caption: url.to_string(),
+                            reply_parameters: ReplyParameters {
+                                message_id,
+                                chat_id,
+                                quote: url.to_string(),
+                            },
+                        }).await;
+                        if let Err(err) = res {
+                            tracing::error!(
+                                message = "App:webhook_handler: cannot send telegram video by file_id",
+                                error = %err
+                            );
+                        } else {
+                            return;
+                        }
+                    }
+                    Ok(None) => (),
+                    Err(err) => tracing::error!(
+                        message = "App:webhook_handler: cannot get video from db",
+                        error = %err
+                    ),
+                };
                 let result = async {
                     let result = match url.domain() {
                         Some(d) if d.ends_with("tiktok.com") => {
@@ -147,13 +183,13 @@ async fn webhook_handler(
                         .send()
                         .await?;
                     let size = video.content_length();
-                    state
+                    let message = state
                         .telegram
                         .send_video(SendVideo {
                             chat_id,
-                            video: telegram::Video::Stream((Box::new(video.bytes_stream()), size)),
-                            width: result.width,
-                            height: result.height,
+                            video: telegram::SendVideoVideo::Stream((Box::new(video.bytes_stream()), size)),
+                            width: Some(result.width),
+                            height: Some(result.height),
                             caption: url.to_string(),
                             reply_parameters: ReplyParameters {
                                 message_id,
@@ -162,6 +198,13 @@ async fn webhook_handler(
                             },
                         })
                         .await?;
+                    let file_id = message
+                        .video
+                        .context("App:webhook_handler: cannot get video from message")?
+                        .file_id;
+                    if let Err(err) = state.db.insert_video(url.as_str(), &file_id).await {
+                        tracing::error!(message = "App:webhook_handler: cannot insert row to `videos` table", error = %err);
+                    }
                     return Ok(());
                 }
                 .await;
@@ -192,6 +235,7 @@ type ServerStateType = Arc<ServerState>;
 
 struct ServerState {
     client: Arc<Client>,
+    db: Db,
     telegram: Telegram,
     tiktok_resolver: TikTokResolver,
     twitter_resolver: TwitterResolver,

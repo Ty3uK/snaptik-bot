@@ -69,20 +69,24 @@ impl Telegram {
         }
     }
 
-    pub async fn send_video(&self, req: SendVideo) -> Result<()> {
+    pub async fn send_video(&self, req: SendVideo) -> Result<Message> {
         let mut form = Form::new()
             .text("chat_id", req.chat_id.to_string())
-            .text("width", req.width.to_string())
-            .text("height", req.height.to_string())
             .text("caption", req.caption)
             .text(
                 "reply_parameters",
                 serde_json::to_string(&req.reply_parameters)
                     .context("Telegram:send_video: cannot stringify json")?,
             );
+        if let Some(width) = req.width {
+            form = form.text("width", width.to_string());
+        }
+        if let Some(height) = req.height {
+            form = form.text("height", height.to_string());
+        }
         match req.video {
-            Video::FileId(file_id) => form = form.text("file_id", file_id),
-            Video::Stream((stream, size)) => {
+            SendVideoVideo::FileId(file_id) => form = form.text("video", file_id),
+            SendVideoVideo::Stream((stream, size)) => {
                 let stream = Body::wrap_stream(stream);
                 let part = if let Some(size) = size {
                     Part::stream_with_length(stream, size)
@@ -99,8 +103,7 @@ impl Telegram {
         };
         let body = self
             .client
-            .post("http://localhost:4000")
-            // .post(format!("{}/sendVideo", self.endpoint))
+            .post(format!("{}/sendVideo", self.endpoint))
             .multipart(form)
             .send()
             .await
@@ -111,7 +114,9 @@ impl Telegram {
         let res: TelegramResponse<Message> =
             serde_json::from_slice(&body).context("Telegram:send_video: cannot parse json")?;
         match res {
-            TelegramResponse::Ok { .. } => return Ok(()),
+            TelegramResponse::Ok { result, .. } => {
+                return Ok(result);
+            }
             TelegramResponse::Err { description, .. } => {
                 return Err(anyhow!("Telegram:send_video: {}", description));
             }
@@ -165,6 +170,7 @@ pub struct Message {
     pub message_id: i64,
     pub chat: Chat,
     pub text: Option<String>,
+    pub video: Option<Video>,
     pub entities: Option<Vec<Entity>>,
 }
 
@@ -181,16 +187,21 @@ pub struct Entity {
     pub type_field: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Video {
+    pub file_id: String,
+}
+
 pub struct SendVideo {
     pub chat_id: i64,
-    pub video: Video,
-    pub width: u32,
-    pub height: u32,
+    pub video: SendVideoVideo,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
     pub caption: String,
     pub reply_parameters: ReplyParameters,
 }
 
-pub enum Video {
+pub enum SendVideoVideo {
     Stream(
         (
             Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static>,

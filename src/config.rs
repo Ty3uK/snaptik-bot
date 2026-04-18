@@ -3,9 +3,16 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct Config<'a> {
     #[serde(borrow)]
+    pub sqlite: SQLite<'a>,
+    #[serde(borrow)]
     pub telegram: TelegramConfig<'a>,
     #[serde(borrow)]
     pub instagram: Option<InstagramConfig<'a>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SQLite<'a> {
+    pub path: &'a str,
 }
 
 #[derive(Debug, Deserialize, Default)]
