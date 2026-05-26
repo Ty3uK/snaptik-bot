@@ -1,0 +1,20 @@
+{
+  "name": "snaptik",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@effect/language-service": "^0.86.2",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^6"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.96.1",
+    "@effect/platform-bun": "^0.89.0",
+    "@effect/sql": "^0.51.1",
+    "@effect/sql-sqlite-bun": "^0.52.0",
+    "effect": "^3.21.2"
+  }
+}
