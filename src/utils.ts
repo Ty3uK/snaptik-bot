@@ -1,6 +1,6 @@
-import type { TgMessageEntity } from "./model";
+import type { MessageEntity } from "./model";
 
-type Entity = typeof TgMessageEntity.Type;
+type Entity = typeof MessageEntity.Type;
 type ActiveEntity = {
   start: number;
   entity: Entity;

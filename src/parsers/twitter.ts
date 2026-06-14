@@ -1,5 +1,14 @@
 import { HttpClient, HttpClientResponse } from "@effect/platform";
-import { Array as A, Effect, Option, Order, pipe, Schema } from "effect";
+import {
+  Array as A,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Order,
+  Schedule,
+  Schema,
+} from "effect";
 
 class TwitterError extends Schema.TaggedError<TwitterError>()("TwitterError", {
   message: Schema.String,
@@ -8,6 +17,16 @@ class TwitterError extends Schema.TaggedError<TwitterError>()("TwitterError", {
 const GuestTokenResponse = Schema.Struct({
   guest_token: Schema.String,
 });
+
+const VideoInfoVariant = Schema.Struct({
+  bitrate: Schema.OptionFromUndefinedOr(Schema.Int),
+  content_type: Schema.String,
+  url: Schema.String,
+});
+type VideoInfoVariant = typeof VideoInfoVariant.Type;
+type VideoInfoVariantWithBitrate = VideoInfoVariant & {
+  bitrate: Option.Some<number>;
+};
 
 const TwitterResponse = Schema.Struct({
   data: Schema.Struct({
@@ -19,13 +38,7 @@ const TwitterResponse = Schema.Struct({
               Schema.Struct({
                 type: Schema.String,
                 video_info: Schema.Struct({
-                  variants: Schema.Array(
-                    Schema.Struct({
-                      bitrate: Schema.OptionFromUndefinedOr(Schema.Int),
-                      content_type: Schema.String,
-                      url: Schema.String,
-                    }),
-                  ),
+                  variants: Schema.Array(VideoInfoVariant),
                 }),
               }),
             ),
@@ -35,6 +48,14 @@ const TwitterResponse = Schema.Struct({
     }),
   }),
 });
+
+const isMp4Variant = (v: VideoInfoVariant): v is VideoInfoVariantWithBitrate =>
+  v.content_type === "video/mp4" && Option.isSome(v.bitrate);
+
+const VideoInfoVariantByBitrateOrder = Order.mapInput(
+  Order.number,
+  (v: VideoInfoVariantWithBitrate) => v.bitrate.value,
+);
 
 const commonHeaders = {
   "User-Agent":
@@ -46,24 +67,52 @@ const commonHeaders = {
   "accept-language": "en",
 };
 
-const getGuestToken = Effect.gen(function*() {
-  const client = yield* HttpClient.HttpClient;
-  const res = yield* client.post("https://api.x.com/1.1/guest/activate.json", {
-    headers: commonHeaders,
-  });
-  return yield* HttpClientResponse.schemaBodyJson(GuestTokenResponse)(res).pipe(
-    Effect.map((v) => v.guest_token),
-  );
-}).pipe(
-  Effect.tapErrorCause(Effect.logError),
-  Effect.catchAll(
-    (_) => new TwitterError({ message: `Cannot get guest token` }),
-  ),
+const guestTokenRetryPolicy = Schedule.exponential("50 millis").pipe(
+  Schedule.jittered,
+  Schedule.intersect(Schedule.recurs(4)),
+);
+const twitterRetryPolicy = Schedule.exponential("50 millis").pipe(
+  Schedule.jittered,
+  Schedule.intersect(Schedule.recurs(4)),
+);
+
+class TwitterGuestTokenCached extends Context.Tag("TwitterGuestTokenCached")<
+  TwitterGuestTokenCached,
+  {
+    readonly get: () => Effect.Effect<string, TwitterError>;
+  }
+>() { }
+
+export const TwitterGuestTokenCachedLive = Layer.effect(
+  TwitterGuestTokenCached,
+  Effect.gen(function*() {
+    const cached = yield* Effect.cachedWithTTL(
+      Effect.gen(function*() {
+        const client = yield* HttpClient.HttpClient;
+        const res = yield* client
+          .post("https://api.x.com/1.1/guest/activate.json", {
+            headers: commonHeaders,
+          })
+          .pipe(Effect.retry(guestTokenRetryPolicy));
+        const body =
+          yield* HttpClientResponse.schemaBodyJson(GuestTokenResponse)(res);
+        return body.guest_token;
+      }).pipe(
+        Effect.tapErrorCause(Effect.logError),
+        Effect.catchAll(
+          (_) => new TwitterError({ message: `Cannot get guest token` }),
+        ),
+      ),
+      "5 minutes",
+    );
+    return { get: () => cached };
+  }),
 );
 
 export const getVideoUrl = (sourceUrl: URL) =>
   Effect.gen(function*() {
-    const token = yield* getGuestToken;
+    const tokenCached = yield* TwitterGuestTokenCached;
+    const token = yield* tokenCached.get();
     const tweetId = yield* A.last(sourceUrl.pathname.split("/")).pipe(
       Effect.mapError(
         (_) => new TwitterError({ message: "Cannot find tweet id" }),
@@ -90,6 +139,7 @@ export const getVideoUrl = (sourceUrl: URL) =>
         },
       })
       .pipe(
+        Effect.retry(twitterRetryPolicy),
         Effect.tapErrorCause(Effect.logError),
         Effect.catchTags({
           RequestError: () =>
@@ -106,27 +156,22 @@ export const getVideoUrl = (sourceUrl: URL) =>
         (_) => new TwitterError({ message: "Cannot parse response" }),
       ),
     );
-    const media = yield* A.findFirst(
+    const video = yield* A.findFirst(
       data.data.tweetResult.result.legacy.entities.media,
       (v) => v.type === "video",
     ).pipe(
       Effect.mapError(
         (_) => new TwitterError({ message: "Cannot find media of type video" }),
       ),
-    );
-    const videos = yield* pipe(
-      media.video_info.variants,
-      A.filter(
-        (v) => v.content_type === "video/mp4" && Option.isSome(v.bitrate),
+      Effect.map((v) => A.filter(v.video_info.variants, isMp4Variant)),
+      Effect.flatMap((v) =>
+        A.match(v, {
+          onEmpty: () =>
+            Effect.fail(new TwitterError({ message: "Cannot find video" })),
+          onNonEmpty: Effect.succeed,
+        }),
       ),
-      A.match({
-        onEmpty: () =>
-          Effect.fail(new TwitterError({ message: "Cannot find video" })),
-        onNonEmpty: (v) => Effect.succeed(v),
-      }),
+      Effect.map((v) => A.max(v, VideoInfoVariantByBitrateOrder)),
     );
-    return A.max(
-      videos,
-      Order.mapInput(Order.number, (v) => Option.getOrElse(v.bitrate, () => 0)),
-    ).url;
+    return video.url;
   });

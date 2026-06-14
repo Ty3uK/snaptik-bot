@@ -1,28 +1,37 @@
 import { Schema } from "effect";
 
-export const TgUser = Schema.Struct({
-  id: Schema.Int,
-}).pipe(Schema.brand("TgUser"));
+export const UserId = Schema.Int.pipe(Schema.brand("UserId"));
+export const User = Schema.Struct({
+  id: UserId,
+});
 
-export const TgChat = Schema.Struct({
-  id: Schema.Int,
-}).pipe(Schema.brand("TgChat"));
+export const ChatId = Schema.Int.pipe(Schema.brand("ChatId"));
+export const Chat = Schema.Struct({
+  id: ChatId,
+});
 
-export const TgMessageEntity = Schema.Struct({
+export const MessageEntity = Schema.Struct({
   type: Schema.String,
   offset: Schema.Int,
   length: Schema.Int,
-}).pipe(Schema.brand("TgMessageEntity"));
+});
 
-export const TgMessage = Schema.Struct({
-  message_id: Schema.Int,
-  from: Schema.OptionFromUndefinedOr(TgUser),
-  chat: Schema.OptionFromUndefinedOr(TgChat),
+export const MessageId = Schema.Int.pipe(Schema.brand("MessageId"));
+export const Message = Schema.Struct({
+  message_id: MessageId,
+  from: Schema.OptionFromUndefinedOr(User),
+  chat: Schema.OptionFromUndefinedOr(Chat),
   text: Schema.OptionFromUndefinedOr(Schema.String),
-  entities: Schema.OptionFromUndefinedOr(Schema.Array(TgMessageEntity)),
-}).pipe(Schema.brand("TgMessage"));
+  entities: Schema.OptionFromUndefinedOr(Schema.Array(MessageEntity)),
+});
 
-export const TgResponse = <A, I, R>(item: Schema.Schema<A, I, R>) =>
+export const UpdateId = Schema.Int.pipe(Schema.brand("UpdateId"));
+export const Update = Schema.Struct({
+  update_id: UpdateId,
+  message: Schema.OptionFromUndefinedOr(Message),
+});
+
+export const Response = <A, I, R>(item: Schema.Schema<A, I, R>) =>
   Schema.Union(
     Schema.Struct({
       ok: Schema.Literal(true),
@@ -33,9 +42,4 @@ export const TgResponse = <A, I, R>(item: Schema.Schema<A, I, R>) =>
       error_code: Schema.Int,
       description: Schema.String,
     }),
-  ).pipe(Schema.brand("TgResponse"));
-
-export const TgUpdate = Schema.Struct({
-  update_id: Schema.Int,
-  message: Schema.OptionFromUndefinedOr(TgMessage),
-}).pipe(Schema.brand("TgUpdate"));
+  );
