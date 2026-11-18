@@ -13,9 +13,9 @@ type DbClient struct {
 }
 
 type Video struct {
-	Url       string    `json:"url"`
-	FileId    string    `json:"file_id"`
-	CreatedAt time.Time `json:"created_at"`
+	Url       string `json:"url"`
+	FileId    string `json:"file_id"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 func NewDbClient(dbPath string) (*DbClient, error) {
@@ -24,7 +24,7 @@ func NewDbClient(dbPath string) (*DbClient, error) {
 		return nil, fmt.Errorf("Cannot open db: %e", err)
 	}
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS videos (url TEXT PRIMARY KEY, file_id TEXT NOT NULL, created_at DATETIME NOT NULL)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS videos (url TEXT PRIMARY KEY, file_id TEXT NOT NULL, created_at INTEGER NOT NULL) WITHOUT ROWID")
 	if err != nil {
 		return nil, fmt.Errorf("Cannot create table: %s", err)
 	}
@@ -40,7 +40,7 @@ func (client *DbClient) Close() error {
 
 func (client *DbClient) GetVideo(url string) (*Video, error) {
 	var video Video
-	err := client.db.QueryRow("SELECT url, file_id FROM videos WHERE url=?", url).Scan(&video.Url, &video.FileId)
+	err := client.db.QueryRow("SELECT url, file_id, created_at FROM videos WHERE url=?", url).Scan(&video.Url, &video.FileId, &video.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -58,7 +58,7 @@ func (client *DbClient) InsertVideo(url string, fileId string) (bool, error) {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(url, fileId, time.Now())
+	_, err = stmt.Exec(url, fileId, time.Now().Unix())
 	if err != nil {
 		return false, fmt.Errorf("Cannot exec db statement: %e", err)
 	}
