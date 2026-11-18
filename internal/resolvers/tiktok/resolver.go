@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strings"
 
 	"github.com/Ty3uK/snaptik-bot/internal/resolvers"
 )
@@ -19,13 +18,9 @@ type DataForRehydration struct {
 			ItemInfo *struct {
 				ItemStruct *struct {
 					Video *struct {
-						BitrateInfo *[]struct {
-							CodecType *string `json:"CodecType"`
-							PlayAddr  *struct {
-								UrlList *[]string `json:"UrlList"`
-							} `json:"PlayAddr"`
-						} `json:"bitrateInfo"`
-						PlayAddr *string `json:"playAddr"`
+						PlayAddrStruct *struct {
+							UrlList *[]string `json:"UrlList"`
+						} `json:"PlayAddrStruct"`
 					} `json:"video"`
 				} `json:"itemStruct"`
 			} `json:"itemInfo"`
@@ -85,16 +80,9 @@ func (r *TikTokResolver) ResolveUrl(ctx context.Context, sourceUrl string) (*str
 		return nil, fmt.Errorf("Cannot unmarshal __UNIVERSAL_DATA_FOR_REHYDRATION__: %e", err)
 	}
 
-	if data.DefaultScope == nil || data.DefaultScope.VideoDetail == nil || data.DefaultScope.VideoDetail.ItemInfo == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.BitrateInfo == nil || len(*data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.BitrateInfo) == 0 {
+	if data.DefaultScope == nil || data.DefaultScope.VideoDetail == nil || data.DefaultScope.VideoDetail.ItemInfo == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video == nil || data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.PlayAddrStruct == nil || len(*data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.PlayAddrStruct.UrlList) == 0 {
 		return nil, fmt.Errorf("Bad __UNIVERSAL_DATA_FOR_REHYDRATION__")
 	}
 
-	videoUrl := data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.PlayAddr
-	for _, video := range *data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.BitrateInfo {
-		if strings.Contains(*video.CodecType, "h265") {
-			videoUrl = &(*video.PlayAddr.UrlList)[0]
-		}
-	}
-
-	return videoUrl, nil
+	return &(*data.DefaultScope.VideoDetail.ItemInfo.ItemStruct.Video.PlayAddrStruct.UrlList)[0], nil
 }
